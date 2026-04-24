@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Zap, Github, Twitter, Linkedin } from "lucide-react";
+import { Zap, Globe, Link2, ExternalLink } from "lucide-react";
 
 const footerLinks = {
   Product: [
@@ -43,7 +43,7 @@ export default function Footer() {
               to dominate your search rankings without manual effort.
             </p>
             <div className="flex gap-3 mt-6">
-              {[Github, Twitter, Linkedin].map((Icon, i) => (
+              {[Globe, Link2, ExternalLink].map((Icon, i) => (
                 <a
                   key={i}
                   href="#"

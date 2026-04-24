@@ -70,9 +70,7 @@ function ScoreBar({ label, value, max = 100, color = "#00FF41" }: { label: strin
 }
 
 // ─── Module panel content ─────────────────────────────────────────────────────
-function ModuleContent({ id, url }: { id: string; url: string }) {
-  const domain = url ? url.replace(/https?:\/\//, "").replace(/\/$/, "") : "example.com";
-
+function ModuleContent({ id }: { id: string }) {
   switch (id) {
     case "model-feedback": return (
       <div>
@@ -593,7 +591,7 @@ export default function Page() {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><polyline points="2,12 6,6 10,16 14,8 18,14 22,10" stroke="#00FF41" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
           <div>
-            <div style={{ color: "#00FF41", fontWeight: 700, fontSize: "1.1rem", letterSpacing: "0.1em", textShadow: "0 0 10px #00FF41" }}>NEURAL SEO</div>
+            <div style={{ color: "#00FF41", fontWeight: 700, fontSize: "1.1rem", letterSpacing: "0.1em", textShadow: "0 0 10px #00FF41" }}>INDRA SEO</div>
             <div style={{ color: "rgba(0,255,65,0.5)", fontSize: "0.58rem", letterSpacing: "0.15em" }}>AI ANALYSIS ENGINE v2.4.1</div>
           </div>
         </div>
@@ -779,7 +777,7 @@ export default function Page() {
                     display: "block", width: "100%", padding: "10px 20px",
                     background: activeModule === mod.id ? "rgba(0,255,65,0.1)" : "transparent",
                     borderLeft: activeModule === mod.id ? "2px solid #00FF41" : "2px solid transparent",
-                    border: "none", borderLeft: activeModule === mod.id ? "2px solid #00FF41" : "2px solid transparent",
+                    border: "none",
                     color: activeModule === mod.id ? "#00FF41" : "rgba(255,255,255,0.45)",
                     fontSize: "0.68rem", letterSpacing: "0.06em",
                     textAlign: "left", cursor: "pointer",
@@ -805,7 +803,7 @@ export default function Page() {
                 </button>
               </div>
               <div style={{ borderTop: "1px solid rgba(0,255,65,0.15)", paddingTop: "20px" }}>
-                <ModuleContent id={activeModule} url={scannedUrl} />
+                <ModuleContent id={activeModule} />
               </div>
             </div>
           </div>
@@ -815,7 +813,7 @@ export default function Page() {
       {/* ── FOOTER ────────────────────────────────────────────── */}
       <footer style={{ borderTop: "2px solid #00FF41", padding: "20px 40px", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#000" }}>
         <div>
-          <div style={{ color: "#00FF41", fontWeight: 700, fontSize: "0.9rem", letterSpacing: "0.1em" }}>NEURAL SEO</div>
+          <div style={{ color: "#00FF41", fontWeight: 700, fontSize: "0.9rem", letterSpacing: "0.1em" }}>INDRA SEO</div>
           <div style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.6rem", marginTop: "2px" }}>AI-POWERED ANALYSIS ENGINE</div>
         </div>
         <div style={{ display: "flex", gap: "32px" }}>
@@ -824,7 +822,7 @@ export default function Page() {
           ))}
         </div>
         <div style={{ textAlign: "right", color: "rgba(255,255,255,0.25)", fontSize: "0.6rem" }}>
-          <div>© 2026 NEURAL SEO LABS</div>
+          <div>© 2026 INDRA SEO LABS</div>
           <div>ALL SYSTEMS OPERATIONAL</div>
         </div>
       </footer>
