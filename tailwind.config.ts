@@ -14,6 +14,12 @@ const config: Config = {
         mono: ["var(--font-mono)", "monospace"],
       },
       colors: {
+        neon: {
+          DEFAULT: "#00FF41",
+          dim: "#00cc33",
+          dark: "#003b0f",
+          glow: "rgba(0,255,65,0.15)",
+        },
         brand: {
           DEFAULT: "#6366f1",
           50: "#eef2ff",

@@ -1,132 +1,72 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, Zap } from "lucide-react";
-import { cn } from "@/lib/utils";
-
-const navLinks = [
-  { href: "/", label: "Home" },
-  { href: "/features", label: "Features" },
-  { href: "/pricing", label: "Pricing" },
-  { href: "/dashboard", label: "Live Demo" },
-];
+import { useEffect, useState } from "react";
 
 export default function Navbar() {
-  const [open, setOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
-  const pathname = usePathname();
+  const [time, setTime] = useState('');
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handler);
-    return () => window.removeEventListener("scroll", handler);
+    const tick = () => {
+      const now = new Date();
+      setTime(now.toLocaleTimeString('en-US', { hour12: false }));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, []);
 
   return (
-    <header
-      className={cn(
-        "fixed top-0 w-full z-50 transition-all duration-300",
-        scrolled
-          ? "bg-[rgb(6_6_18)/95] backdrop-blur-xl border-b border-white/5 shadow-2xl shadow-brand/5"
-          : "bg-transparent"
-      )}
-    >
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-        {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <div className="w-8 h-8 rounded-lg bg-gradient-brand flex items-center justify-center shadow-lg shadow-brand/40 group-hover:shadow-brand/60 transition-shadow">
-            <Zap className="w-4 h-4 text-white" fill="white" />
+    <header style={{
+      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
+      background: '#000',
+      borderBottom: '2px solid #00FF41',
+      padding: '0 2rem',
+      height: '64px',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{
+          width: '36px', height: '36px',
+          border: '2px solid #00FF41',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '0 0 10px #00FF41',
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <polyline points="2,12 6,6 10,16 14,8 18,14 22,10" stroke="#00FF41" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </div>
+        <div>
+          <div style={{ color: '#00FF41', fontWeight: 700, fontSize: '1.1rem', letterSpacing: '0.1em', textShadow: '0 0 10px #00FF41' }}>
+            NEURAL SEO
           </div>
-          <span className="font-bold text-lg tracking-tight">
-            <span className="gradient-text">RankFlow</span>
-            <span className="text-slate-400 font-normal"> AI</span>
-          </span>
-        </Link>
-
-        {/* Desktop links */}
-        <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200",
-                pathname === link.href
-                  ? "text-brand bg-brand/10"
-                  : "text-slate-400 hover:text-slate-100 hover:bg-white/5"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
+          <div style={{ color: 'rgba(0,255,65,0.5)', fontSize: '0.6rem', letterSpacing: '0.15em' }}>
+            AI ANALYSIS ENGINE v2.4.1
+          </div>
         </div>
+      </div>
 
-        {/* CTA */}
-        <div className="hidden md:flex items-center gap-3">
-          <Link
-            href="/dashboard"
-            className="px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors"
+      <nav style={{ display: 'flex', gap: '2rem' }}>
+        {['HOME', 'FEATURES', 'PRICING', 'DASHBOARD'].map(item => (
+          <a key={item} href={item === 'HOME' ? '/' : `/${item.toLowerCase()}`}
+            style={{ color: 'rgba(0,255,65,0.7)', fontSize: '0.75rem', letterSpacing: '0.15em', textDecoration: 'none', transition: 'color 0.2s' }}
+            onMouseEnter={e => (e.currentTarget.style.color = '#00FF41')}
+            onMouseLeave={e => (e.currentTarget.style.color = 'rgba(0,255,65,0.7)')}
           >
-            Sign in
-          </Link>
-          <Link
-            href="/pricing"
-            className="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-brand text-white hover:opacity-90 transition-opacity shadow-lg shadow-brand/30"
-          >
-            Start Free Trial
-          </Link>
-        </div>
-
-        {/* Mobile menu button */}
-        <button
-          className="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-          onClick={() => setOpen(!open)}
-        >
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
+            {item}
+          </a>
+        ))}
       </nav>
 
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden border-t border-white/5 bg-[rgb(6_6_18)] overflow-hidden"
-          >
-            <div className="px-4 py-4 flex flex-col gap-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "px-4 py-3 rounded-lg text-sm font-medium transition-colors",
-                    pathname === link.href
-                      ? "text-brand bg-brand/10"
-                      : "text-slate-400 hover:text-slate-100 hover:bg-white/5"
-                  )}
-                >
-                  {link.label}
-                </Link>
-              ))}
-              <div className="pt-3 border-t border-white/5 flex flex-col gap-2">
-                <Link
-                  href="/pricing"
-                  onClick={() => setOpen(false)}
-                  className="px-4 py-3 rounded-lg text-sm font-semibold bg-gradient-brand text-white text-center"
-                >
-                  Start Free Trial
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '0.7rem', fontFamily: 'monospace' }}>{time}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{
+            width: '8px', height: '8px', borderRadius: '50%', background: '#00FF41',
+            boxShadow: '0 0 6px #00FF41',
+          }} />
+          <span style={{ color: '#00FF41', fontSize: '0.7rem', letterSpacing: '0.15em' }}>SYSTEM ONLINE</span>
+        </div>
+      </div>
     </header>
   );
 }

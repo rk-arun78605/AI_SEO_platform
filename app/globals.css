@@ -2,119 +2,149 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  :root {
-    --brand: 99 102 241;
-    --accent: 16 185 129;
-    --bg: 6 6 18;
-    --surface: 13 13 31;
-    --surface2: 22 22 48;
-    --border: 255 255 255;
-    --text: 248 250 252;
-    --muted: 148 163 184;
-  }
-
-  * {
-    border-color: rgb(var(--border) / 0.1);
-  }
-
-  body {
-    background-color: rgb(var(--bg));
-    color: rgb(var(--text));
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-
-  html {
-    scroll-behavior: smooth;
-  }
-}
-
-@layer utilities {
-  .gradient-text {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .gradient-brand {
-    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
-  }
-
-  .glow {
-    box-shadow: 0 0 40px rgb(99 102 241 / 0.3), 0 0 80px rgb(99 102 241 / 0.1);
-  }
-
-  .glow-sm {
-    box-shadow: 0 0 20px rgb(99 102 241 / 0.2);
-  }
-
-  .card-surface {
-    background: rgb(var(--surface));
-    border: 1px solid rgb(255 255 255 / 0.06);
-  }
-
-  .card-surface-2 {
-    background: rgb(var(--surface2));
-    border: 1px solid rgb(255 255 255 / 0.08);
-  }
-
-  .animate-float {
-    animation: float 6s ease-in-out infinite;
-  }
-
-  .animate-pulse-slow {
-    animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  }
-
-  .grid-bg {
-    background-image:
-      linear-gradient(rgb(99 102 241 / 0.03) 1px, transparent 1px),
-      linear-gradient(to right, rgb(99 102 241 / 0.03) 1px, transparent 1px);
-    background-size: 60px 60px;
-  }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-12px); }
-}
-
-/* scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: rgb(6 6 18); }
-::-webkit-scrollbar-thumb { background: rgb(99 102 241 / 0.4); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgb(99 102 241 / 0.7); }
-
-/* recharts tooltip */
-.recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: rgb(13 13 31) !important;
-  border: 1px solid rgb(99 102 241 / 0.3) !important;
-  border-radius: 8px !important;
-  color: #f8fafc !important;
-}
-
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --neon: #00FF41;
+  --neon-dim: #00cc33;
+  --neon-glow: rgba(0, 255, 65, 0.2);
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --surface2: #111111;
+  --border-neon: rgba(0, 255, 65, 0.3);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: #ffffff;
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: var(--neon-dim); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--neon); }
+
+/* Selection */
+::selection { background: rgba(0,255,65,0.25); color: #fff; }
+
+/* Neon grid background */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(0,255,65,0.04) 1px, transparent 1px),
+    linear-gradient(to right, rgba(0,255,65,0.04) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Neon glow utilities */
+.neon-glow {
+  box-shadow: 0 0 10px var(--neon), 0 0 30px rgba(0,255,65,0.3), 0 0 60px rgba(0,255,65,0.1);
+}
+.neon-glow-sm {
+  box-shadow: 0 0 6px var(--neon), 0 0 15px rgba(0,255,65,0.2);
+}
+.neon-border {
+  border: 1px solid var(--border-neon);
+}
+.neon-border-bright {
+  border: 1px solid var(--neon);
+}
+
+/* Text glow */
+.text-neon-glow {
+  text-shadow: 0 0 10px var(--neon), 0 0 20px rgba(0,255,65,0.5);
+}
+
+/* Scan line effect */
+.scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.05) 2px,
+    rgba(0,0,0,0.05) 4px
+  );
+  pointer-events: none;
+}
+
+/* Blinking cursor */
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+.blink { animation: blink 1s step-end infinite; }
+
+/* Float animation */
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float { animation: float 4s ease-in-out infinite; }
+
+/* Neon pulse */
+@keyframes neon-pulse {
+  0%,100% { box-shadow: 0 0 5px var(--neon), 0 0 10px rgba(0,255,65,0.3); }
+  50% { box-shadow: 0 0 20px var(--neon), 0 0 40px rgba(0,255,65,0.5), 0 0 60px rgba(0,255,65,0.2); }
+}
+.neon-pulse { animation: neon-pulse 2s ease-in-out infinite; }
+
+/* Scan progress bar */
+@keyframes scan {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+.scan-anim::after {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 60px;
+  background: linear-gradient(to right, transparent, var(--neon), transparent);
+  animation: scan 1.5s ease-in-out infinite;
+}
+
+/* Module panel slide */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+.slide-in { animation: slideIn 0.3s ease-out; }
+
+/* Progress bar fill */
+@keyframes fillBar {
+  from { width: 0; }
+  to { width: var(--fill); }
+}
+
+/* Typing effect */
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Input base */
+input[type="text"], input[type="email"], input[type="tel"], input[type="url"] {
+  background: #000;
+  border: 1px solid rgba(0,255,65,0.3);
+  color: #fff;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+input[type="text"]:focus, input[type="email"]:focus, input[type="tel"]:focus, input[type="url"]:focus {
+  border-color: var(--neon);
+  box-shadow: 0 0 8px rgba(0,255,65,0.3);
+}
+
+/* Recharts override */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #0a0a0a !important;
+  border: 1px solid rgba(0,255,65,0.4) !important;
+  border-radius: 4px !important;
+  color: #fff !important;
+  font-family: 'JetBrains Mono', monospace !important;
 }
