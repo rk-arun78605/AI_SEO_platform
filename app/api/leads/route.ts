@@ -7,7 +7,6 @@ export const runtime = "nodejs";
 
 const requiredEnv = [
   "AWS_REGION",
-  "LEADS_TABLE_NAME",
 ] as const;
 
 function missingEnvVars(): string[] {
@@ -71,6 +70,19 @@ export async function POST(request: Request) {
   const now = new Date().toISOString();
   const leadId = randomUUID();
 
+  if (!process.env.LEADS_TABLE_NAME) {
+    console.warn("[/api/leads] LEADS_TABLE_NAME is not configured; accepting lead without persistence");
+    return NextResponse.json(
+      {
+        ok: true,
+        leadId,
+        persisted: false,
+        warning: "Lead storage is not configured",
+      },
+      { status: 202 },
+    );
+  }
+
   const ddb = new DynamoDBClient({ region: process.env.AWS_REGION });
   const docClient = DynamoDBDocumentClient.from(ddb, {
     marshallOptions: { removeUndefinedValues: true },
@@ -99,6 +111,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, leadId }, { status: 201 });
   } catch (error) {
     console.error("[/api/leads]", error);
+
+    const awsErrorName =
+      typeof error === "object" && error !== null && "name" in error
+        ? String((error as { name?: unknown }).name)
+        : "";
+
+    if (awsErrorName === "ResourceNotFoundException") {
+      return NextResponse.json(
+        {
+          ok: true,
+          leadId,
+          persisted: false,
+          warning: "Lead table not found",
+        },
+        { status: 202 },
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to save lead" },
       { status: 500 },
