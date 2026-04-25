@@ -9,6 +9,14 @@ export const runtime = "nodejs";
 type SiteIntelPayload = {
   userId?: string;
   siteUrl: string;
+  sitewide: {
+    discoveredUrls: number;
+    analyzedUrls: number;
+    titleCoveragePct: number;
+    descriptionCoveragePct: number;
+    h1CoveragePct: number;
+    topKeywords: string[];
+  };
   title: string;
   description: string;
   primaryTopic: string;
@@ -67,6 +75,9 @@ type SiteIntelPayload = {
 };
 
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const MAX_SITEMAP_URLS = 500;
+const MAX_ANALYZE_URLS = 120;
+const FETCH_TIMEOUT_MS = 8000;
 const intelCache = new Map<string, { expiresAt: number; data: SiteIntelPayload }>();
 
 const STOP_WORDS = new Set([
@@ -123,6 +134,173 @@ function cleanTerm(term: string): string {
     .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function toAbsoluteUrl(rawUrl: string, base: URL): string | null {
+  try {
+    const candidate = new URL(rawUrl, base);
+    if (candidate.hostname !== base.hostname) return null;
+    if (candidate.protocol !== "http:" && candidate.protocol !== "https:") return null;
+    candidate.hash = "";
+    return candidate.toString();
+  } catch {
+    return null;
+  }
+}
+
+function extractInternalUrlsFromHtml(html: string, base: URL): string[] {
+  const re = /<a[^>]+href=["']([^"']+)["']/gi;
+  const urls = new Set<string>();
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html)) !== null) {
+    const href = m[1]?.trim();
+    if (!href || href.startsWith("mailto:") || href.startsWith("tel:") || href.startsWith("javascript:")) {
+      continue;
+    }
+    const absolute = toAbsoluteUrl(href, base);
+    if (absolute) urls.add(absolute);
+  }
+
+  return Array.from(urls);
+}
+
+function extractLocUrlsFromSitemapXml(xml: string, base: URL): string[] {
+  const re = /<loc>([\s\S]*?)<\/loc>/gi;
+  const urls: string[] = [];
+
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(xml)) !== null) {
+    const loc = m[1]?.trim();
+    if (!loc) continue;
+    const absolute = toAbsoluteUrl(loc, base);
+    if (absolute) urls.push(absolute);
+  }
+
+  return urls;
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      cache: "no-store",
+      headers: {
+        "User-Agent": "IndraSEO-Bot/1.0 (+https://indraseo.com)",
+        ...(init.headers ?? {}),
+      },
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function discoverSiteUrls(base: URL, homepageHtml: string): Promise<string[]> {
+  const discovered = new Set<string>();
+  discovered.add(base.toString());
+
+  for (const url of extractInternalUrlsFromHtml(homepageHtml, base)) {
+    discovered.add(url);
+    if (discovered.size >= MAX_SITEMAP_URLS) break;
+  }
+
+  const toVisit = [`${base.origin}/sitemap.xml`];
+  const visited = new Set<string>();
+
+  while (toVisit.length && discovered.size < MAX_SITEMAP_URLS) {
+    const sitemapUrl = toVisit.shift();
+    if (!sitemapUrl || visited.has(sitemapUrl)) continue;
+    visited.add(sitemapUrl);
+
+    try {
+      const res = await fetchWithTimeout(sitemapUrl, { method: "GET" }, 6000);
+      if (!res.ok) continue;
+      const xml = await res.text();
+      const urls = extractLocUrlsFromSitemapXml(xml, base);
+
+      if (/<sitemapindex/i.test(xml)) {
+        for (const u of urls) {
+          if (!visited.has(u) && !toVisit.includes(u)) toVisit.push(u);
+        }
+      } else {
+        for (const u of urls) {
+          discovered.add(u);
+          if (discovered.size >= MAX_SITEMAP_URLS) break;
+        }
+      }
+    } catch {
+      // Ignore sitemap fetch failures and continue with what we already discovered.
+    }
+  }
+
+  return Array.from(discovered);
+}
+
+async function analyzeSiteUrls(urls: string[]): Promise<SiteIntelPayload["sitewide"]> {
+  const queue = urls.slice(0, MAX_ANALYZE_URLS);
+  const batches: Array<Array<string>> = [];
+
+  for (let i = 0; i < queue.length; i += 6) {
+    batches.push(queue.slice(i, i + 6));
+  }
+
+  let analyzed = 0;
+  let titleCount = 0;
+  let descriptionCount = 0;
+  let h1Count = 0;
+  const keywordFreq = new Map<string, number>();
+
+  for (const batch of batches) {
+    const results = await Promise.all(
+      batch.map(async (url) => {
+        try {
+          const res = await fetchWithTimeout(url, { method: "GET" }, 6000);
+          if (!res.ok) return null;
+          const html = await res.text();
+          const title = firstMatch(html, /<title[^>]*>([\s\S]*?)<\/title>/i);
+          const description = firstMatch(
+            html,
+            /<meta[^>]*name=["']description["'][^>]*content=["']([\s\S]*?)["'][^>]*>/i,
+          );
+          const h1 = firstMatch(html, /<h1[^>]*>([\s\S]*?)<\/h1>/i);
+          const text = stripTags(html).slice(0, 8000);
+          const terms = topTerms(`${title} ${description} ${h1} ${text}`, 8);
+          return { title, description, h1, terms };
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    for (const item of results) {
+      if (!item) continue;
+      analyzed += 1;
+      if (item.title) titleCount += 1;
+      if (item.description) descriptionCount += 1;
+      if (item.h1) h1Count += 1;
+      for (const term of item.terms) {
+        keywordFreq.set(term, (keywordFreq.get(term) ?? 0) + 1);
+      }
+    }
+  }
+
+  const topKeywords = Array.from(keywordFreq.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 12)
+    .map(([term]) => term);
+
+  const denom = Math.max(analyzed, 1);
+  return {
+    discoveredUrls: urls.length,
+    analyzedUrls: analyzed,
+    titleCoveragePct: Math.round((titleCount / denom) * 100),
+    descriptionCoveragePct: Math.round((descriptionCount / denom) * 100),
+    h1CoveragePct: Math.round((h1Count / denom) * 100),
+    topKeywords,
+  };
 }
 
 function buildKeywordClusters(
@@ -458,9 +636,12 @@ export async function GET(request: NextRequest) {
 
     const plainText = stripTags(html).slice(0, 15000);
     const contentKeywords = topTerms(`${title} ${description} ${h1} ${plainText}`, 12);
+    const discoveredUrls = await discoverSiteUrls(validated, html);
+    const sitewide = await analyzeSiteUrls(discoveredUrls);
     const gscKeywords = await gscQueriesForSite(validated.toString());
     const usingGscKeywords = gscKeywords.length >= 5;
-    const keywords = usingGscKeywords ? gscKeywords.slice(0, 12) : contentKeywords;
+    const mergedContentKeywords = Array.from(new Set([...contentKeywords, ...sitewide.topKeywords])).slice(0, 20);
+    const keywords = usingGscKeywords ? gscKeywords.slice(0, 12) : mergedContentKeywords.slice(0, 12);
     const primaryTopic = inferTopic(title, description, keywords);
     const keywordClusters = buildKeywordClusters(keywords, usingGscKeywords ? "gsc" : "content");
 
@@ -507,11 +688,20 @@ export async function GET(request: NextRequest) {
       ? mlInsights.recommendations
       : seoRecommendations(primaryTopic, keywords);
 
+    if (sitewide.descriptionCoveragePct < 70) {
+      recommendations.unshift("Increase meta description coverage across site URLs to at least 90% for better CTR consistency.");
+    }
+    if (sitewide.titleCoveragePct < 85) {
+      recommendations.unshift("Add unique title tags across all indexable URLs to improve query matching and ranking coverage.");
+    }
+
     const summary = [
       title ? `Title: ${title}` : "Title not found",
       description ? `Description: ${description}` : "Description not found",
       h1 ? `Primary heading: ${h1}` : "Primary heading not found",
       `Detected topic: ${primaryTopic}`,
+      `Sitewide URLs discovered: ${sitewide.discoveredUrls}, analyzed: ${sitewide.analyzedUrls}`,
+      `Coverage - title: ${sitewide.titleCoveragePct}%, meta description: ${sitewide.descriptionCoveragePct}%, H1: ${sitewide.h1CoveragePct}%`,
       keywords.length ? `Theme keywords: ${keywords.slice(0, 5).join(", ")}` : "Theme keywords: limited data",
       `Model summary: ${mlInsights.summary}`,
     ].join(". ");
@@ -538,6 +728,7 @@ export async function GET(request: NextRequest) {
     const payload: SiteIntelPayload = {
       userId: userId || undefined,
       siteUrl: validated.toString(),
+      sitewide,
       title,
       description,
       primaryTopic,

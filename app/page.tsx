@@ -504,24 +504,37 @@ function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connect
     case "eeat": return (
       <div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "24px" }}>
-          {[["EXPERTISE", "72", "#00FF41"], ["EXPERIENCE", "58", "#ffaa00"], ["AUTHORITATIVENESS", "45", "#ffaa00"], ["TRUSTWORTHINESS", "81", "#00FF41"]].map(([k, v, c]) => (
+          {[
+            ["EXPERTISE", intel?.kpis?.seo ?? 72],
+            ["EXPERIENCE", intel?.kpis?.user ?? 58],
+            ["AUTHORITATIVENESS", intel?.kpis?.functional ?? 45],
+            ["TRUSTWORTHINESS", intel?.kpis?.technical ?? 81],
+          ].map(([k, v]) => {
+            const score = Number(v);
+            const c = score >= 70 ? "#00FF41" : score >= 45 ? "#ffaa00" : "#ff4444";
+            return (
             <div key={k as string} style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", textAlign: "center" }}>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.58rem", letterSpacing: "0.1em", marginBottom: "8px" }}>{k}</div>
-              <div style={{ color: c as string, fontSize: "2.2rem", fontWeight: 700 }}>{v}</div>
+              <div style={{ color: c, fontSize: "2.2rem", fontWeight: 700 }}>{score}</div>
               <div style={{ color: "rgba(255,255,255,0.2)", fontSize: "0.6rem" }}>/100</div>
             </div>
-          ))}
+            );
+          })}
         </div>
         <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px" }}>
           <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>AI E.E.A.T ASSESSMENT</div>
-          {["No author bio pages detected — Google's quality raters look for author credentials",
-            "About Us page exists but lacks team credentials and certifications",
-            "No case studies or testimonials with verifiable details",
-            "Privacy Policy and Terms of Service are present — positive trust signal",
-            "Contact page with physical address and phone number — boosts trustworthiness",
-          ].map((item, i) => (
+          {((intel?.issues?.length
+            ? intel.issues.slice(0, 5).map((issue) => `Problem: ${issue.problem}. Solution: ${issue.solution}`)
+            : intel?.recommendations?.slice(0, 5))
+            ?? [
+              "No author bio pages detected — Google's quality raters look for author credentials",
+              "About Us page exists but lacks team credentials and certifications",
+              "No case studies or testimonials with verifiable details",
+              "Privacy Policy and Terms of Service are present — positive trust signal",
+              "Contact page with physical address and phone number — boosts trustworthiness",
+            ]).map((item, i) => (
             <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-              <span style={{ color: i < 3 ? "#ffaa00" : "#00FF41", fontSize: "0.7rem" }}>{i < 3 ? "▲" : "✓"}</span>
+              <span style={{ color: i < 2 ? "#ffaa00" : "#00FF41", fontSize: "0.7rem" }}>{i < 2 ? "▲" : "✓"}</span>
               <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem" }}>{item}</span>
             </div>
           ))}
@@ -1079,48 +1092,53 @@ export default function Page() {
           </div>
 
           {/* Right: Lead Form */}
-          {leadSubmitted ? (
-            <div style={{ background: "#0a0a0a", border: "1px solid #00FF41", padding: "32px", boxShadow: "0 0 30px rgba(0,255,65,0.2)", textAlign: "center" }}>
-              <div style={{ fontSize: "3rem", marginBottom: "16px" }}>✓</div>
-              <div style={{ color: "#00FF41", fontSize: "1rem", letterSpacing: "0.15em", marginBottom: "8px" }}>REQUEST RECEIVED</div>
-              <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.75rem" }}>Scroll down to scan your website now.</div>
-              <button onClick={() => scanRef.current?.scrollIntoView({ behavior: "smooth" })}
-                style={{ ...S.btnPrimary, marginTop: "20px", width: "auto", padding: "10px 30px" }}>
-                GO TO SCANNER ↓
-              </button>
-            </div>
-          ) : (
-            <div style={{ background: "#0a0a0a", border: "1px solid rgba(0,255,65,0.35)", padding: "32px", boxShadow: "0 0 30px rgba(0,255,65,0.1)" }}>
-              <div style={{ color: "#00FF41", fontSize: "0.75rem", letterSpacing: "0.15em", marginBottom: "6px" }}>GET FREE AUDIT</div>
-              <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.65rem", letterSpacing: "0.1em", marginBottom: "24px", borderBottom: "1px solid rgba(0,255,65,0.15)", paddingBottom: "16px" }}>COMPREHENSIVE SITE ANALYSIS</div>
-              <form onSubmit={handleLeadSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                {[["NAME*", "name", "text", "Enter your name"],
-                  ["EMAIL*", "email", "email", "your@email.com"],
-                  ["PHONE*", "phone", "tel", "+1 (555) 000-0000"],
-                  ["WEBSITE URL*", "website", "url", "https://yoursite.com"],
-                ].map(([label, field, type, placeholder]) => (
-                  <div key={field}>
-                    <label style={S.labelStyle}>{label}</label>
-                    <input
-                      type={type} placeholder={placeholder}
-                      value={lead[field as keyof Lead]}
-                      onChange={e => setLead(prev => ({ ...prev, [field]: e.target.value }))}
-                      disabled={isSubmittingLead}
-                      style={S.inputStyle}
-                    />
-                  </div>
-                ))}
-                {leadError && <div style={{ color: "#ff4444", fontSize: "0.65rem" }}>{leadError}</div>}
-                {leadSubmitSuccess && <div style={{ color: "#00FF41", fontSize: "0.65rem" }}>{leadSubmitSuccess}</div>}
-                <button type="submit" disabled={isSubmittingLead} style={{ ...S.btnPrimary, opacity: isSubmittingLead ? 0.7 : 1 }}>
-                  {isSubmittingLead ? "SUBMITTING..." : "⚡ SUBMIT REQUEST"}
-                </button>
-                <div style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.62rem", textAlign: "center", letterSpacing: "0.08em" }}>
-                  NO CREDIT CARD REQUIRED • 100% FREE ANALYSIS
+          <div style={{ background: "#0a0a0a", border: "1px solid rgba(0,255,65,0.35)", padding: "32px", boxShadow: "0 0 30px rgba(0,255,65,0.1)" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.75rem", letterSpacing: "0.15em", marginBottom: "6px" }}>GET FREE AUDIT</div>
+            <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.65rem", letterSpacing: "0.1em", marginBottom: "24px", borderBottom: "1px solid rgba(0,255,65,0.15)", paddingBottom: "16px" }}>COMPREHENSIVE SITE ANALYSIS</div>
+
+            {leadSubmitted && (
+              <div style={{ border: "1px solid rgba(0,255,65,0.35)", background: "rgba(0,255,65,0.08)", color: "#00FF41", fontSize: "0.68rem", padding: "10px", marginBottom: "12px", letterSpacing: "0.06em" }}>
+                REQUEST RECEIVED. Form reset for a new lead. You can scroll down and run scan now.
+              </div>
+            )}
+
+            <form onSubmit={handleLeadSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {[["NAME*", "name", "text", "Enter your name"],
+                ["EMAIL*", "email", "email", "your@email.com"],
+                ["PHONE*", "phone", "tel", "+1 (555) 000-0000"],
+                ["WEBSITE URL*", "website", "url", "https://yoursite.com"],
+              ].map(([label, field, type, placeholder]) => (
+                <div key={field}>
+                  <label style={S.labelStyle}>{label}</label>
+                  <input
+                    type={type} placeholder={placeholder}
+                    value={lead[field as keyof Lead]}
+                    onChange={e => setLead(prev => ({ ...prev, [field]: e.target.value }))}
+                    disabled={isSubmittingLead}
+                    style={S.inputStyle}
+                  />
                 </div>
-              </form>
-            </div>
-          )}
+              ))}
+              {leadError && <div style={{ color: "#ff4444", fontSize: "0.65rem" }}>{leadError}</div>}
+              {leadSubmitSuccess && <div style={{ color: "#00FF41", fontSize: "0.65rem" }}>{leadSubmitSuccess}</div>}
+              <button type="submit" disabled={isSubmittingLead} style={{ ...S.btnPrimary, opacity: isSubmittingLead ? 0.7 : 1 }}>
+                {isSubmittingLead ? "SUBMITTING..." : "⚡ SUBMIT REQUEST"}
+              </button>
+              <div style={{ color: "rgba(255,255,255,0.25)", fontSize: "0.62rem", textAlign: "center", letterSpacing: "0.08em" }}>
+                NO CREDIT CARD REQUIRED • 100% FREE ANALYSIS
+              </div>
+
+              {leadSubmitted && (
+                <button
+                  type="button"
+                  onClick={() => scanRef.current?.scrollIntoView({ behavior: "smooth" })}
+                  style={{ ...S.btnPrimary, background: "transparent", border: "1px solid rgba(0,255,65,0.45)", color: "#00FF41", boxShadow: "none" }}
+                >
+                  GO TO SCANNER ↓
+                </button>
+              )}
+            </form>
+          </div>
         </div>
       </section>
 
