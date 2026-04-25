@@ -62,6 +62,7 @@ export async function GET(request: Request) {
     userId: state.userId,
     provider: state.provider,
     connected: true,
+    authMode: "oauth",
     connectedAt: new Date().toISOString(),
     accessToken: tokenData.access_token,
     refreshToken: tokenData.refresh_token,

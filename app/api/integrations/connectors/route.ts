@@ -33,7 +33,9 @@ export async function GET(request: Request) {
       connected: Boolean(gscRecord?.connected),
       description: "Search query performance, indexing coverage, and sitemap submission.",
       connectUrl: `/api/integrations/google/start?provider=gsc&userId=${encodeURIComponent(userId)}`,
-      note: gscRecord?.connected ? `Connected at ${gscRecord.connectedAt ?? "unknown time"}` : "Connect your Google account for real property-level data.",
+      note: gscRecord?.connected
+        ? `Connected (${gscRecord.authMode ?? "oauth"}) at ${gscRecord.connectedAt ?? "unknown time"}${gscRecord.credentialHint ? ` • ${gscRecord.credentialHint}` : ""}`
+        : "Connect using Google login or secret key for property-level data.",
     },
     {
       id: "ga4",
@@ -41,7 +43,9 @@ export async function GET(request: Request) {
       connected: Boolean(ga4Record?.connected),
       description: "User engagement, conversions, and channel attribution.",
       connectUrl: `/api/integrations/google/start?provider=ga4&userId=${encodeURIComponent(userId)}`,
-      note: ga4Record?.connected ? `Connected at ${ga4Record.connectedAt ?? "unknown time"}` : "Connect your Google account to map GA4 properties.",
+      note: ga4Record?.connected
+        ? `Connected (${ga4Record.authMode ?? "oauth"}) at ${ga4Record.connectedAt ?? "unknown time"}${ga4Record.credentialHint ? ` • ${ga4Record.credentialHint}` : ""}`
+        : "Connect using Google login or secret key to map GA4 properties.",
     },
     {
       id: "meta",
@@ -49,7 +53,9 @@ export async function GET(request: Request) {
       connected: Boolean(metaRecord?.connected),
       description: "Facebook/Instagram campaign traffic and paid-social ROI signals.",
       connectUrl: "https://developers.facebook.com/docs/marketing-api",
-      note: metaRecord?.connected ? `Connected at ${metaRecord.connectedAt ?? "unknown time"}` : "Meta OAuth connector can be added in next step.",
+      note: metaRecord?.connected
+        ? `Connected (${metaRecord.authMode ?? "secret-key"}) at ${metaRecord.connectedAt ?? "unknown time"}${metaRecord.credentialHint ? ` • ${metaRecord.credentialHint}` : ""}`
+        : "Connect using secret key now (OAuth can be added later).",
     },
     {
       id: "youtube",
@@ -57,7 +63,9 @@ export async function GET(request: Request) {
       connected: Boolean(youtubeRecord?.connected),
       description: "Video-driven demand signals and organic assist journeys.",
       connectUrl: `/api/integrations/google/start?provider=youtube&userId=${encodeURIComponent(userId)}`,
-      note: youtubeRecord?.connected ? `Connected at ${youtubeRecord.connectedAt ?? "unknown time"}` : "Connect your Google account to link YouTube analytics.",
+      note: youtubeRecord?.connected
+        ? `Connected (${youtubeRecord.authMode ?? "oauth"}) at ${youtubeRecord.connectedAt ?? "unknown time"}${youtubeRecord.credentialHint ? ` • ${youtubeRecord.credentialHint}` : ""}`
+        : "Connect using Google login or secret key to link YouTube analytics.",
     },
   ];
 

@@ -98,6 +98,23 @@ interface PageSpeedInlineResult {
   error?: string;
 }
 
+type ConnectorId = ConnectorStatus["connectors"][number]["id"];
+
+interface ConnectorChoice {
+  id: ConnectorId;
+  label: string;
+  oauthUrl: string;
+  supportsOauth: boolean;
+  supportsSecretKey: boolean;
+}
+
+interface SeoToolOption {
+  id: string;
+  label: string;
+  category: "analytics" | "technical" | "content" | "authority" | "local";
+  description: string;
+}
+
 type IssueItem = SiteIntel["issues"][number];
 type IssueAction = IssueItem["actions"][number];
 
@@ -124,6 +141,20 @@ const MODULES = [
   { id: "optimization-detail",    label: "Optimization Panel Detail" },
   { id: "uiux",                   label: "UI/UX Detail" },
   { id: "backlinking",            label: "Backlinking Detail" },
+];
+
+const SEO_TOOL_OPTIONS: SeoToolOption[] = [
+  { id: "gsc", label: "Google Search Console", category: "analytics", description: "Index coverage, ranking queries, CTR and page performance." },
+  { id: "ga4", label: "Google Analytics 4", category: "analytics", description: "Engagement, conversion funnels and channel attribution." },
+  { id: "meta", label: "Meta/Facebook Insights", category: "analytics", description: "Paid-social campaign impact and audience behavior." },
+  { id: "youtube", label: "YouTube Analytics", category: "analytics", description: "Video demand signals and search assist journeys." },
+  { id: "pagespeed", label: "PageSpeed + Core Web Vitals", category: "technical", description: "LCP/INP/CLS diagnostics and performance opportunities." },
+  { id: "crawler", label: "Site Crawler", category: "technical", description: "Broken links, indexability, duplicate pages and architecture gaps." },
+  { id: "schema", label: "Schema Validator", category: "technical", description: "Structured data validation and rich result readiness." },
+  { id: "keyword-cluster", label: "Keyword Cluster Engine", category: "content", description: "Intent clusters, topical maps and content gap opportunities." },
+  { id: "content-optimizer", label: "Content Optimizer", category: "content", description: "On-page scoring for headings, entities and semantic coverage." },
+  { id: "backlinks", label: "Backlink Intelligence", category: "authority", description: "Referring domain quality, toxic links and authority growth." },
+  { id: "local-seo", label: "Local SEO Pack", category: "local", description: "GBP visibility, citations, reviews and local landing pages." },
 ];
 
 // ─── Shared styles ────────────────────────────────────────────────────────────
@@ -173,7 +204,7 @@ function ScoreBar({ label, value, max = 100, color = "#00FF41" }: { label: strin
 }
 
 // ─── Module panel content ─────────────────────────────────────────────────────
-function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, approvalDraft, onApproveDraft, onCancelDraft, actionStatus, connectorStatus, pageSpeedInline }: {
+function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, approvalDraft, onApproveDraft, onCancelDraft, onConnectorClick, selectedSeoTools, onToggleSeoTool, actionStatus, connectorStatus, pageSpeedInline }: {
   id: string;
   analysis: DashboardPayload | null;
   intel: SiteIntel | null;
@@ -182,6 +213,9 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
   approvalDraft: ActionApprovalDraft | null;
   onApproveDraft: () => void;
   onCancelDraft: () => void;
+  onConnectorClick: (connector: ConnectorStatus["connectors"][number]) => void;
+  selectedSeoTools: string[];
+  onToggleSeoTool: (toolId: string) => void;
   actionStatus: Record<string, string>;
   connectorStatus: ConnectorStatus | null;
   pageSpeedInline: Record<string, PageSpeedInlineResult>;
@@ -853,7 +887,7 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
                   {conn.description}
                 </div>
                 <button
-                  onClick={() => window.open(conn.connectUrl, "_blank", "noopener,noreferrer")}
+                  onClick={() => onConnectorClick(conn)}
                   style={{
                     border: "1px solid rgba(0,255,65,0.35)",
                     background: "transparent",
@@ -869,6 +903,39 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginBottom: "16px" }}>
+          <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "8px" }}>ROBUST SEO STRATEGY TOOL STACK</div>
+          <div style={{ color: "rgba(255,255,255,0.62)", fontSize: "0.66rem", marginBottom: "12px", lineHeight: 1.7 }}>
+            Select the tools you want enabled for this account. Start with GSC + GA4 + PageSpeed + Crawler for strongest baseline.
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {SEO_TOOL_OPTIONS.map((tool) => {
+              const selected = selectedSeoTools.includes(tool.id);
+              return (
+                <button
+                  key={tool.id}
+                  onClick={() => onToggleSeoTool(tool.id)}
+                  style={{
+                    textAlign: "left",
+                    border: selected ? "1px solid rgba(0,255,65,0.55)" : "1px solid rgba(255,255,255,0.15)",
+                    background: selected ? "rgba(0,255,65,0.1)" : "transparent",
+                    padding: "9px",
+                    cursor: "pointer",
+                    fontFamily: "'JetBrains Mono', monospace",
+                  }}
+                >
+                  <div style={{ color: selected ? "#00FF41" : "rgba(255,255,255,0.8)", fontSize: "0.64rem", letterSpacing: "0.03em" }}>
+                    {selected ? "[x]" : "[ ]"} {tool.label}
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.6rem", marginTop: "4px", lineHeight: 1.5 }}>
+                    {tool.description}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -1020,6 +1087,11 @@ export default function Page() {
   const [approvalDraft, setApprovalDraft] = useState<ActionApprovalDraft | null>(null);
   const [connectorStatus, setConnectorStatus] = useState<ConnectorStatus | null>(null);
   const [activeModule, setActiveModule] = useState("analytics");
+  const [connectorChoice, setConnectorChoice] = useState<ConnectorChoice | null>(null);
+  const [manualSecret, setManualSecret] = useState("");
+  const [manualAccountLabel, setManualAccountLabel] = useState("");
+  const [manualConnectStatus, setManualConnectStatus] = useState("");
+  const [selectedSeoTools, setSelectedSeoTools] = useState<string[]>(["gsc", "ga4", "pagespeed", "crawler"]);
   const [leadError, setLeadError] = useState("");
   const [sessionUser, setSessionUser] = useState<{ name: string; email: string; website: string } | null>(null);
   const scanRef = useRef<HTMLDivElement>(null);
@@ -1200,25 +1272,81 @@ export default function Page() {
     setApprovalDraft(null);
   };
 
+  const refreshConnectors = (userId: string, mounted?: { current: boolean }) => {
+    fetch(`/api/integrations/connectors?userId=${encodeURIComponent(userId)}`)
+      .then((r) => r.json())
+      .then((payload: ConnectorStatus) => {
+        if (!mounted || mounted.current) setConnectorStatus(payload);
+      })
+      .catch(() => {
+        if (!mounted || mounted.current) setConnectorStatus(null);
+      });
+  };
+
+  const openConnectorChoice = (connector: ConnectorStatus["connectors"][number]) => {
+    const oauthProviders: ConnectorId[] = ["gsc", "ga4", "youtube"];
+    setManualSecret("");
+    setManualAccountLabel("");
+    setManualConnectStatus("");
+    setConnectorChoice({
+      id: connector.id,
+      label: connector.label,
+      oauthUrl: connector.connectUrl,
+      supportsOauth: oauthProviders.includes(connector.id),
+      supportsSecretKey: true,
+    });
+  };
+
+  const submitManualConnector = async () => {
+    const userId = sessionUser?.email?.trim().toLowerCase() ?? "";
+    if (!userId || !connectorChoice) {
+      setManualConnectStatus("Submit lead form first to identify user.");
+      return;
+    }
+    if (!manualSecret.trim()) {
+      setManualConnectStatus("Enter secret key/token.");
+      return;
+    }
+
+    setManualConnectStatus("Connecting with secret key...");
+    try {
+      const response = await fetch("/api/integrations/connectors/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          provider: connectorChoice.id,
+          secretKey: manualSecret.trim(),
+          accountLabel: manualAccountLabel.trim(),
+        }),
+      });
+
+      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !payload.ok) {
+        setManualConnectStatus(payload.error ?? "Unable to connect using secret key.");
+        return;
+      }
+
+      setManualConnectStatus("Connected with secret key.");
+      refreshConnectors(userId);
+      setTimeout(() => setConnectorChoice(null), 500);
+    } catch {
+      setManualConnectStatus("Network error while connecting.");
+    }
+  };
+
   useEffect(() => {
-    let mounted = true;
+    const mounted = { current: true };
     const userId = sessionUser?.email?.trim().toLowerCase() ?? "";
     if (!userId) {
       setConnectorStatus(null);
       return;
     }
 
-    fetch(`/api/integrations/connectors?userId=${encodeURIComponent(userId)}`)
-      .then((r) => r.json())
-      .then((payload: ConnectorStatus) => {
-        if (mounted) setConnectorStatus(payload);
-      })
-      .catch(() => {
-        if (mounted) setConnectorStatus(null);
-      });
+    refreshConnectors(userId, mounted);
 
     return () => {
-      mounted = false;
+      mounted.current = false;
     };
   }, [sessionUser?.email]);
 
@@ -1466,6 +1594,15 @@ export default function Page() {
                   approvalDraft={approvalDraft}
                   onApproveDraft={approveDraftAction}
                   onCancelDraft={cancelDraftAction}
+                  onConnectorClick={openConnectorChoice}
+                  selectedSeoTools={selectedSeoTools}
+                  onToggleSeoTool={(toolId) => {
+                    setSelectedSeoTools((prev) =>
+                      prev.includes(toolId)
+                        ? prev.filter((id) => id !== toolId)
+                        : [...prev, toolId],
+                    );
+                  }}
                   actionStatus={actionStatus}
                   connectorStatus={connectorStatus}
                   pageSpeedInline={pageSpeedInline}
@@ -1474,6 +1611,92 @@ export default function Page() {
             </div>
           </div>
         </section>
+      )}
+
+      {connectorChoice && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+          <div style={{ width: "100%", maxWidth: "720px", background: "#070707", border: "1px solid rgba(0,255,65,0.35)", padding: "20px" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.74rem", letterSpacing: "0.1em", marginBottom: "8px" }}>
+              CONNECT {connectorChoice.label.toUpperCase()}
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.67rem", marginBottom: "12px" }}>
+              Choose your preferred connection method for this connector.
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div style={{ border: "1px solid rgba(0,255,65,0.25)", padding: "12px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "8px" }}>LOGIN CONNECT (OAuth)</div>
+                <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.63rem", lineHeight: 1.6, marginBottom: "10px" }}>
+                  Use provider login to grant secure read access without sharing raw keys.
+                </div>
+                <button
+                  disabled={!connectorChoice.supportsOauth}
+                  onClick={() => {
+                    if (!connectorChoice.supportsOauth) return;
+                    window.open(connectorChoice.oauthUrl, "_blank", "noopener,noreferrer");
+                  }}
+                  style={{
+                    ...S.btnPrimary,
+                    width: "auto",
+                    padding: "8px 12px",
+                    fontSize: "0.62rem",
+                    opacity: connectorChoice.supportsOauth ? 1 : 0.5,
+                  }}
+                >
+                  {connectorChoice.supportsOauth ? "CONNECT WITH LOGIN" : "NOT AVAILABLE FOR THIS CONNECTOR"}
+                </button>
+              </div>
+
+              <div style={{ border: "1px solid rgba(0,255,65,0.25)", padding: "12px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "8px" }}>SECRET KEY CONNECT</div>
+                <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.63rem", lineHeight: 1.6, marginBottom: "10px" }}>
+                  Paste API/secret token for direct connector linking. Keys are stored as masked references.
+                </div>
+                <input
+                  value={manualAccountLabel}
+                  onChange={(e) => setManualAccountLabel(e.target.value)}
+                  placeholder="Account label (optional)"
+                  style={{ ...S.inputStyle, marginBottom: "8px", fontSize: "0.7rem" }}
+                />
+                <input
+                  value={manualSecret}
+                  onChange={(e) => setManualSecret(e.target.value)}
+                  placeholder="Secret key / access token"
+                  style={{ ...S.inputStyle, marginBottom: "8px", fontSize: "0.7rem" }}
+                />
+                <button
+                  onClick={submitManualConnector}
+                  style={{ ...S.btnPrimary, width: "auto", padding: "8px 12px", fontSize: "0.62rem" }}
+                >
+                  CONNECT WITH SECRET KEY
+                </button>
+                {manualConnectStatus && (
+                  <div style={{ marginTop: "8px", color: "rgba(255,255,255,0.7)", fontSize: "0.62rem" }}>
+                    {manualConnectStatus}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginTop: "12px", display: "flex", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setConnectorChoice(null)}
+                style={{
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  background: "transparent",
+                  color: "rgba(255,255,255,0.75)",
+                  padding: "8px 12px",
+                  fontSize: "0.62rem",
+                  letterSpacing: "0.06em",
+                  cursor: "pointer",
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── FOOTER ────────────────────────────────────────────── */}

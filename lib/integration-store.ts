@@ -7,8 +7,10 @@ export interface ConnectorRecord {
   userId: string;
   provider: ConnectorProvider;
   connected: boolean;
+  authMode?: "oauth" | "secret-key";
   connectedAt?: string;
   accountLabel?: string;
+  credentialHint?: string;
   accessToken?: string;
   refreshToken?: string;
   expiresAt?: string;
@@ -35,8 +37,10 @@ export async function getConnector(userId: string, provider: ConnectorProvider):
     userId,
     provider,
     connected: Boolean(result.Item.connected),
+    authMode: result.Item.authMode,
     connectedAt: result.Item.connectedAt,
     accountLabel: result.Item.accountLabel,
+    credentialHint: result.Item.credentialHint,
     accessToken: result.Item.accessToken,
     refreshToken: result.Item.refreshToken,
     expiresAt: result.Item.expiresAt,
@@ -53,8 +57,10 @@ export async function upsertConnector(record: ConnectorRecord): Promise<void> {
         sk: `CONNECTOR#${record.provider}`,
         provider: record.provider,
         connected: record.connected,
+        authMode: record.authMode,
         connectedAt: record.connectedAt ?? new Date().toISOString(),
         accountLabel: record.accountLabel,
+        credentialHint: record.credentialHint,
         accessToken: record.accessToken,
         refreshToken: record.refreshToken,
         expiresAt: record.expiresAt,
