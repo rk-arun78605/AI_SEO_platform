@@ -98,6 +98,16 @@ interface PageSpeedInlineResult {
   error?: string;
 }
 
+type IssueItem = SiteIntel["issues"][number];
+type IssueAction = IssueItem["actions"][number];
+
+interface ActionApprovalDraft {
+  issueId: string;
+  issueProblem: string;
+  issueSolution: string;
+  action: IssueAction;
+}
+
 // ─── Module definitions (from wireframe) ─────────────────────────────────────
 const MODULES = [
   { id: "analytics",              label: "Analytics" },
@@ -163,11 +173,15 @@ function ScoreBar({ label, value, max = 100, color = "#00FF41" }: { label: strin
 }
 
 // ─── Module panel content ─────────────────────────────────────────────────────
-function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connectorStatus, pageSpeedInline }: {
+function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, approvalDraft, onApproveDraft, onCancelDraft, actionStatus, connectorStatus, pageSpeedInline }: {
   id: string;
   analysis: DashboardPayload | null;
   intel: SiteIntel | null;
   onRunAction: (issueId: string, action: NonNullable<SiteIntel["issues"]>[number]["actions"][number]) => void;
+  onRequestApproval: (issue: IssueItem, action: IssueAction) => void;
+  approvalDraft: ActionApprovalDraft | null;
+  onApproveDraft: () => void;
+  onCancelDraft: () => void;
   actionStatus: Record<string, string>;
   connectorStatus: ConnectorStatus | null;
   pageSpeedInline: Record<string, PageSpeedInlineResult>;
@@ -543,21 +557,105 @@ function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connect
         </div>
         <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px" }}>
           <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>AI E.E.A.T ASSESSMENT</div>
-          {((intel?.issues?.length
-            ? intel.issues.slice(0, 5).map((issue) => `Problem: ${issue.problem}. Solution: ${issue.solution}`)
-            : intel?.recommendations?.slice(0, 5))
-            ?? [
+          {intel?.issues?.length ? (
+            intel.issues.slice(0, 5).map((issue, i) => {
+              const isWarning = i < 2;
+              const defaultAction = issue.actions[0];
+              const key = defaultAction ? `${issue.id}:${defaultAction.id}` : "";
+              const isDraft = approvalDraft?.issueId === issue.id;
+              return (
+                <div key={issue.id} style={{ padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <span style={{ color: isWarning ? "#ffaa00" : "#00FF41", fontSize: "0.7rem" }}>{isWarning ? "▲" : "✓"}</span>
+                    <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem", lineHeight: 1.7 }}>
+                      <div>Problem: {issue.problem}</div>
+                      <div style={{ color: "rgba(0,255,65,0.75)" }}>Solution: {issue.solution}</div>
+                    </div>
+                  </div>
+
+                  {defaultAction && (
+                    <div style={{ marginTop: "8px", marginLeft: "20px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => onRequestApproval(issue, defaultAction)}
+                        style={{
+                          padding: "6px 10px",
+                          border: "1px solid rgba(0,255,65,0.35)",
+                          background: "transparent",
+                          color: "#00FF41",
+                          fontSize: "0.62rem",
+                          letterSpacing: "0.06em",
+                          cursor: "pointer",
+                          fontFamily: "'JetBrains Mono', monospace",
+                        }}
+                      >
+                        REVIEW CHANGE
+                      </button>
+
+                      {isDraft && (
+                        <>
+                          <button
+                            onClick={onApproveDraft}
+                            style={{
+                              padding: "6px 10px",
+                              border: "1px solid rgba(0,255,65,0.45)",
+                              background: "rgba(0,255,65,0.12)",
+                              color: "#00FF41",
+                              fontSize: "0.62rem",
+                              letterSpacing: "0.06em",
+                              cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                            }}
+                          >
+                            APPROVE & IMPLEMENT
+                          </button>
+                          <button
+                            onClick={onCancelDraft}
+                            style={{
+                              padding: "6px 10px",
+                              border: "1px solid rgba(255,255,255,0.25)",
+                              background: "transparent",
+                              color: "rgba(255,255,255,0.72)",
+                              fontSize: "0.62rem",
+                              letterSpacing: "0.06em",
+                              cursor: "pointer",
+                              fontFamily: "'JetBrains Mono', monospace",
+                            }}
+                          >
+                            CANCEL
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {defaultAction && isDraft && (
+                    <div style={{ marginTop: "8px", marginLeft: "20px", color: "rgba(255,255,255,0.62)", fontSize: "0.64rem" }}>
+                      Do you want to apply this change now? Click &quot;APPROVE & IMPLEMENT&quot; to run it.
+                    </div>
+                  )}
+
+                  {key && actionStatus[key] && (
+                    <div style={{ marginTop: "6px", marginLeft: "20px", color: "rgba(255,255,255,0.72)", fontSize: "0.64rem" }}>
+                      {actionStatus[key]}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            [
               "No author bio pages detected — Google's quality raters look for author credentials",
               "About Us page exists but lacks team credentials and certifications",
               "No case studies or testimonials with verifiable details",
               "Privacy Policy and Terms of Service are present — positive trust signal",
               "Contact page with physical address and phone number — boosts trustworthiness",
-            ]).map((item, i) => (
-            <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-              <span style={{ color: i < 2 ? "#ffaa00" : "#00FF41", fontSize: "0.7rem" }}>{i < 2 ? "▲" : "✓"}</span>
-              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem" }}>{item}</span>
-            </div>
-          ))}
+            ].map((item, i) => (
+              <div key={i} style={{ display: "flex", gap: "10px", padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <span style={{ color: i < 2 ? "#ffaa00" : "#00FF41", fontSize: "0.7rem" }}>{i < 2 ? "▲" : "✓"}</span>
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem" }}>{item}</span>
+              </div>
+            ))
+          )}
         </div>
       </div>
     );
@@ -919,6 +1017,7 @@ export default function Page() {
   const [scanError, setScanError] = useState("");
   const [actionStatus, setActionStatus] = useState<Record<string, string>>({});
   const [pageSpeedInline, setPageSpeedInline] = useState<Record<string, PageSpeedInlineResult>>({});
+  const [approvalDraft, setApprovalDraft] = useState<ActionApprovalDraft | null>(null);
   const [connectorStatus, setConnectorStatus] = useState<ConnectorStatus | null>(null);
   const [activeModule, setActiveModule] = useState("analytics");
   const [leadError, setLeadError] = useState("");
@@ -1015,6 +1114,7 @@ export default function Page() {
       setSiteIntel(intelPayload);
       setActionStatus({});
       setPageSpeedInline({});
+      setApprovalDraft(null);
       setScannedUrl(normalized);
       setScanProgress(100);
       setShowDashboard(true);
@@ -1079,6 +1179,25 @@ export default function Page() {
         setActionStatus((prev) => ({ ...prev, [key]: "Failed: network error" }));
       }
     }
+  };
+
+  const requestActionApproval = (issue: IssueItem, action: IssueAction) => {
+    setApprovalDraft({
+      issueId: issue.id,
+      issueProblem: issue.problem,
+      issueSolution: issue.solution,
+      action,
+    });
+  };
+
+  const approveDraftAction = () => {
+    if (!approvalDraft) return;
+    void runIssueAction(approvalDraft.issueId, approvalDraft.action);
+    setApprovalDraft(null);
+  };
+
+  const cancelDraftAction = () => {
+    setApprovalDraft(null);
   };
 
   useEffect(() => {
@@ -1173,12 +1292,6 @@ export default function Page() {
           <div style={{ background: "#0a0a0a", border: "1px solid rgba(0,255,65,0.35)", padding: "32px", boxShadow: "0 0 30px rgba(0,255,65,0.1)" }}>
             <div style={{ color: "#00FF41", fontSize: "0.75rem", letterSpacing: "0.15em", marginBottom: "6px" }}>GET FREE AUDIT</div>
             <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.65rem", letterSpacing: "0.1em", marginBottom: "24px", borderBottom: "1px solid rgba(0,255,65,0.15)", paddingBottom: "16px" }}>COMPREHENSIVE SITE ANALYSIS</div>
-
-            {leadSubmitted && (
-              <div style={{ border: "1px solid rgba(0,255,65,0.35)", background: "rgba(0,255,65,0.08)", color: "#00FF41", fontSize: "0.68rem", padding: "10px", marginBottom: "12px", letterSpacing: "0.06em" }}>
-                REQUEST RECEIVED. Form reset for a new lead. You can scroll down and run scan now.
-              </div>
-            )}
 
             <form onSubmit={handleLeadSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {[["NAME*", "name", "text", "Enter your name"],
@@ -1349,6 +1462,10 @@ export default function Page() {
                   analysis={scanData}
                   intel={siteIntel}
                   onRunAction={runIssueAction}
+                  onRequestApproval={requestActionApproval}
+                  approvalDraft={approvalDraft}
+                  onApproveDraft={approveDraftAction}
+                  onCancelDraft={cancelDraftAction}
                   actionStatus={actionStatus}
                   connectorStatus={connectorStatus}
                   pageSpeedInline={pageSpeedInline}
