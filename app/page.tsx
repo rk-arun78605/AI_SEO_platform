@@ -79,8 +79,28 @@ interface ConnectorStatus {
   }>;
 }
 
+interface PageSpeedInlineResult {
+  ok: boolean;
+  summary?: {
+    score: number;
+    passed: number;
+    warnings: number;
+    failed: number;
+    lcp: string;
+    inp: string;
+    cls: string;
+  };
+  opportunities?: Array<{
+    id: string;
+    title: string;
+    displayValue: string;
+  }>;
+  error?: string;
+}
+
 // ─── Module definitions (from wireframe) ─────────────────────────────────────
 const MODULES = [
+  { id: "analytics",              label: "Analytics" },
   { id: "model-feedback",         label: "Model Feedback" },
   { id: "core-web-vitals",        label: "Core Web Vitals" },
   { id: "core-web-vitals-detail", label: "Core Web Vitals Detail" },
@@ -92,7 +112,6 @@ const MODULES = [
   { id: "eeat-detail",            label: "E.E.A.T Detail" },
   { id: "optimization-panel",     label: "Optimization Panel" },
   { id: "optimization-detail",    label: "Optimization Panel Detail" },
-  { id: "analytics",              label: "Analytics" },
   { id: "uiux",                   label: "UI/UX Detail" },
   { id: "backlinking",            label: "Backlinking Detail" },
 ];
@@ -144,13 +163,14 @@ function ScoreBar({ label, value, max = 100, color = "#00FF41" }: { label: strin
 }
 
 // ─── Module panel content ─────────────────────────────────────────────────────
-function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connectorStatus }: {
+function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connectorStatus, pageSpeedInline }: {
   id: string;
   analysis: DashboardPayload | null;
   intel: SiteIntel | null;
   onRunAction: (issueId: string, action: NonNullable<SiteIntel["issues"]>[number]["actions"][number]) => void;
   actionStatus: Record<string, string>;
   connectorStatus: ConnectorStatus | null;
+  pageSpeedInline: Record<string, PageSpeedInlineResult>;
 }) {
   switch (id) {
     case "model-feedback": return (
@@ -619,6 +639,31 @@ function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connect
                     {message}
                   </div>
                 ))}
+
+              {Object.entries(pageSpeedInline)
+                .filter(([k]) => k.startsWith(`${issue.id}:`))
+                .map(([k, report]) => (
+                  <div key={k} style={{ marginTop: "10px", border: "1px solid rgba(0,255,65,0.22)", background: "rgba(0,255,65,0.05)", padding: "10px" }}>
+                    {report.ok && report.summary ? (
+                      <>
+                        <div style={{ color: "#00FF41", fontSize: "0.64rem", letterSpacing: "0.08em", marginBottom: "6px" }}>IN-PLATFORM PAGESPEED RESULT</div>
+                        <div style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.68rem", marginBottom: "6px" }}>
+                          Score: {report.summary.score}/100 • LCP: {report.summary.lcp} • INP: {report.summary.inp} • CLS: {report.summary.cls}
+                        </div>
+                        <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.64rem", marginBottom: "4px" }}>
+                          Audits: {report.summary.passed} passed, {report.summary.warnings} warnings, {report.summary.failed} failed
+                        </div>
+                        {(report.opportunities ?? []).slice(0, 3).map((opp) => (
+                          <div key={opp.id} style={{ color: "rgba(255,255,255,0.72)", fontSize: "0.63rem", marginTop: "4px" }}>
+                            - {opp.title}{opp.displayValue ? ` (${opp.displayValue})` : ""}
+                          </div>
+                        ))}
+                      </>
+                    ) : (
+                      <div style={{ color: "#ff4444", fontSize: "0.64rem" }}>{report.error ?? "Unable to run PageSpeed"}</div>
+                    )}
+                  </div>
+                ))}
             </div>
           ))}
         </div>
@@ -678,6 +723,17 @@ function ModuleContent({ id, analysis, intel, onRunAction, actionStatus, connect
 
     case "analytics": return (
       <div>
+        {(!connectorStatus || connectorStatus.connectedCount < connectorStatus.total) && (
+          <div style={{ background: "rgba(255,170,0,0.08)", border: "1px solid rgba(255,170,0,0.35)", padding: "12px", marginBottom: "16px" }}>
+            <div style={{ color: "#ffaa00", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "6px" }}>
+              CONNECT DATA SOURCES FOR DETAILED REPORTS
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.72)", fontSize: "0.68rem", lineHeight: 1.7 }}>
+              Connect Google Search Console, GA4, Meta/Facebook, and YouTube Analytics to unlock ranking keywords, channel attribution, page-level traffic, and conversion trends.
+            </div>
+          </div>
+        )}
+
         <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginBottom: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
             <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em" }}>TRAFFIC TOOL CONNECTORS</div>
@@ -862,8 +918,9 @@ export default function Page() {
   const [siteIntel, setSiteIntel] = useState<SiteIntel | null>(null);
   const [scanError, setScanError] = useState("");
   const [actionStatus, setActionStatus] = useState<Record<string, string>>({});
+  const [pageSpeedInline, setPageSpeedInline] = useState<Record<string, PageSpeedInlineResult>>({});
   const [connectorStatus, setConnectorStatus] = useState<ConnectorStatus | null>(null);
-  const [activeModule, setActiveModule] = useState("model-feedback");
+  const [activeModule, setActiveModule] = useState("analytics");
   const [leadError, setLeadError] = useState("");
   const [sessionUser, setSessionUser] = useState<{ name: string; email: string; website: string } | null>(null);
   const scanRef = useRef<HTMLDivElement>(null);
@@ -957,6 +1014,7 @@ export default function Page() {
       setScanData(dashboardPayload);
       setSiteIntel(intelPayload);
       setActionStatus({});
+      setPageSpeedInline({});
       setScannedUrl(normalized);
       setScanProgress(100);
       setShowDashboard(true);
@@ -973,6 +1031,26 @@ export default function Page() {
     action: NonNullable<SiteIntel["issues"]>[number]["actions"][number],
   ) => {
     const key = `${issueId}:${action.id}`;
+
+    if (action.id === "open-pagespeed-insights") {
+      setActionStatus((prev) => ({ ...prev, [key]: "Running PageSpeed inside IndraSEO..." }));
+      try {
+        const response = await fetch(`/api/pagespeed?siteUrl=${encodeURIComponent(scannedUrl)}`, { cache: "no-store" });
+        const payload = (await response.json()) as PageSpeedInlineResult;
+        if (!response.ok || !payload.ok) {
+          setPageSpeedInline((prev) => ({ ...prev, [key]: { ok: false, error: payload.error ?? "Failed to run PageSpeed" } }));
+          setActionStatus((prev) => ({ ...prev, [key]: "Failed to run PageSpeed" }));
+          return;
+        }
+
+        setPageSpeedInline((prev) => ({ ...prev, [key]: payload }));
+        setActionStatus((prev) => ({ ...prev, [key]: "PageSpeed result loaded below" }));
+      } catch {
+        setPageSpeedInline((prev) => ({ ...prev, [key]: { ok: false, error: "Network error while running PageSpeed" } }));
+        setActionStatus((prev) => ({ ...prev, [key]: "Failed to run PageSpeed" }));
+      }
+      return;
+    }
 
     if (action.type === "link" && action.url) {
       window.open(action.url, "_blank", "noopener,noreferrer");
@@ -1273,6 +1351,7 @@ export default function Page() {
                   onRunAction={runIssueAction}
                   actionStatus={actionStatus}
                   connectorStatus={connectorStatus}
+                  pageSpeedInline={pageSpeedInline}
                 />
               </div>
             </div>
