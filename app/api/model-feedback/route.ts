@@ -23,8 +23,6 @@ type FeedbackBody = {
 function envReady(): boolean {
   return Boolean(
     process.env.AWS_REGION &&
-    process.env.AWS_ACCESS_KEY_ID &&
-    process.env.AWS_SECRET_ACCESS_KEY &&
     process.env.MODEL_FEEDBACK_TABLE_NAME,
   );
 }

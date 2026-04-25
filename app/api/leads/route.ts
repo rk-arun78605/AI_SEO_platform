@@ -7,8 +7,6 @@ export const runtime = "nodejs";
 
 const requiredEnv = [
   "AWS_REGION",
-  "AWS_ACCESS_KEY_ID",
-  "AWS_SECRET_ACCESS_KEY",
   "LEADS_TABLE_NAME",
 ] as const;
 
