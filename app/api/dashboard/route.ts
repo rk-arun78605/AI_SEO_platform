@@ -4,7 +4,7 @@
 //
 // GET /api/dashboard?siteUrl=https://example.com/
 //
-// When credentials are not configured, returns demo data (isDemo: true).
+// When credentials are not configured, returns empty live payload.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAccessToken, searchAnalytics, SearchRow } from "@/lib/gsc";
@@ -29,52 +29,31 @@ function fmtPct(n: number, decimals = 1): string {
 
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-/* ─── Demo fallback ─────────────────────────────────────────────── */
+/* ─── Empty fallback ────────────────────────────────────────────── */
 
-const DEMO: DashboardPayload = {
-  isDemo: true,
-  siteUrl: "demo.rankflowai.com",
-  lastUpdated: new Date().toISOString(),
-  kpis: [
-    { label: "Organic Traffic",    value: "51.2K", change: "+32%",     up: true },
-    { label: "Keywords Top 10",    value: "1,847", change: "+18%",     up: true },
-    { label: "Avg. Position",      value: "4.8",   change: "-2.1 pts", up: true },
-    { label: "Click-Through Rate", value: "5.4%",  change: "+0.8%",    up: true },
-  ],
-  trafficData: [
-    { month:"Jan", organic:12400, paid:0 }, { month:"Feb", organic:14200, paid:0 },
-    { month:"Mar", organic:13800, paid:0 }, { month:"Apr", organic:17500, paid:0 },
-    { month:"May", organic:21000, paid:0 }, { month:"Jun", organic:19800, paid:0 },
-    { month:"Jul", organic:24300, paid:0 }, { month:"Aug", organic:28900, paid:0 },
-    { month:"Sep", organic:32400, paid:0 }, { month:"Oct", organic:38700, paid:0 },
-    { month:"Nov", organic:42100, paid:0 }, { month:"Dec", organic:51200, paid:0 },
-  ],
-  rankingData: [
-    { week:"W1", avg:18 }, { week:"W2", avg:16 }, { week:"W3", avg:14 },
-    { week:"W4", avg:11 }, { week:"W5", avg:9  }, { week:"W6", avg:7.5 },
-    { week:"W7", avg:6  }, { week:"W8", avg:4.8 },
-  ],
-  keywordsData: [
-    { name:"AI SEO platform",          vol:8100, pos:3, change:2  },
-    { name:"automated seo tool",       vol:5400, pos:5, change:-1 },
-    { name:"seo automation software",  vol:4900, pos:7, change:4  },
-    { name:"rank tracking AI",         vol:3600, pos:2, change:1  },
-    { name:"content optimization AI",  vol:6700, pos:4, change:3  },
-    { name:"technical seo audit tool", vol:2900, pos:1, change:0  },
-  ],
-  auditData: [
-    { name:"Passed",   value:68, color:"#10b981" },
-    { name:"Warnings", value:9,  color:"#f59e0b" },
-    { name:"Failed",   value:3,  color:"#ef4444" },
-  ],
-  contentItems: [
-    { title:"How AI is Revolutionizing SEO",        score:94, status:"Published", traffic:"4.2k" },
-    { title:"Complete Guide to Technical SEO",      score:88, status:"Draft",     traffic:"—"    },
-    { title:"Keyword Research in 2026",             score:91, status:"Published", traffic:"2.8k" },
-    { title:"E-E-A-T: What It Means for Rankings",  score:76, status:"Review",    traffic:"—"    },
-  ],
-  yoyChange: "+312%",
-};
+function emptyPayload(siteUrl: string): DashboardPayload {
+  return {
+    isDemo: false,
+    siteUrl,
+    lastUpdated: new Date().toISOString(),
+    kpis: [
+      { label: "Organic Traffic", value: "0", change: "0%", up: false },
+      { label: "Keywords Top 10", value: "0", change: "0%", up: false },
+      { label: "Avg. Position", value: "—", change: "0 pts", up: false },
+      { label: "Click-Through Rate", value: "0.0%", change: "0.0%", up: false },
+    ],
+    trafficData: [],
+    rankingData: [],
+    keywordsData: [],
+    auditData: [
+      { name: "Passed", value: 0, color: "#10b981" },
+      { name: "Warnings", value: 0, color: "#f59e0b" },
+      { name: "Failed", value: 0, color: "#ef4444" },
+    ],
+    contentItems: [],
+    yoyChange: "0%",
+  };
+}
 
 /* ─── Route handler ─────────────────────────────────────────────── */
 
@@ -86,9 +65,9 @@ export async function GET(request: NextRequest) {
 
   const token = await getAccessToken();
 
-  // Return demo data when credentials are missing or no site is configured
+  // Return empty payload when credentials are missing or no site is configured
   if (!token || !siteUrl) {
-    return NextResponse.json({ ...DEMO, lastUpdated: new Date().toISOString() });
+    return NextResponse.json(emptyPayload(siteUrl || "unconfigured-site"));
   }
 
   try {
@@ -238,7 +217,7 @@ export async function GET(request: NextRequest) {
           { name: "Warnings", value: audit.warnings, color: "#f59e0b" },
           { name: "Failed",   value: audit.failed,   color: "#ef4444" },
         ]
-      : DEMO.auditData;
+      : emptyPayload(siteUrl).auditData;
 
     /* ── 6. Top pages (content section) ────────────────────────── */
     const pageRows: SearchRow[] = pagesRes.status === "fulfilled" ? (pagesRes.value.rows ?? []) : [];
@@ -249,7 +228,7 @@ export async function GET(request: NextRequest) {
           const path = row.keys[0].replace(/^https?:\/\/[^/]+/, "") || "/";
           return { title: path, score: perfScore, status: "Live", traffic: fmtCompact(row.clicks) };
         })
-      : DEMO.contentItems;
+      : emptyPayload(siteUrl).contentItems;
 
     /* ── 7. YoY change badge ────────────────────────────────────── */
     // Compare last 6 months vs same 6-month window 1 year ago
@@ -283,7 +262,7 @@ export async function GET(request: NextRequest) {
 
   } catch (err) {
     console.error("[/api/dashboard]", err);
-    // On any error fall back to demo data so the UI stays functional
-    return NextResponse.json({ ...DEMO, lastUpdated: new Date().toISOString() });
+    // On any error return empty live payload so the UI stays functional without fake data
+    return NextResponse.json(emptyPayload(siteUrl));
   }
 }

@@ -8,7 +8,7 @@
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GSC_BASE  = "https://www.googleapis.com/webmasters/v3";
-const SCOPE     = "https://www.googleapis.com/auth/webmasters.readonly";
+const SCOPE     = "https://www.googleapis.com/auth/webmasters";
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -143,4 +143,25 @@ export async function searchAnalytics(
     throw new Error(`GSC ${res.status}: ${text.slice(0, 300)}`);
   }
   return res.json();
+}
+
+export async function submitSitemap(
+  token: string,
+  siteUrl: string,
+  sitemapUrl: string,
+): Promise<void> {
+  const encodedSite = encodeURIComponent(siteUrl);
+  const encodedMap = encodeURIComponent(sitemapUrl);
+
+  const res = await fetch(`${GSC_BASE}/sites/${encodedSite}/sitemaps/${encodedMap}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Sitemap submit failed ${res.status}: ${text.slice(0, 300)}`);
+  }
 }

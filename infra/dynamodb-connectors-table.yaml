@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Indra SEO user connector tokens table
+
+Resources:
+  IndraSeoConnectorsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: indra-seo-connectors
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  ConnectorsTableName:
+    Value: !Ref IndraSeoConnectorsTable
+    Description: DynamoDB table name for user connectors

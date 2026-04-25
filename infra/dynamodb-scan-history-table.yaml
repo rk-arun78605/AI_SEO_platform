@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Indra SEO scan history table for pre/post trend learning
+
+Resources:
+  IndraSeoScanHistoryTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: indra-seo-scan-history
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      SSESpecification:
+        SSEEnabled: true
+
+Outputs:
+  ScanHistoryTableName:
+    Value: !Ref IndraSeoScanHistoryTable
+    Description: DynamoDB table name for per-user site scan snapshots
