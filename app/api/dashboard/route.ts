@@ -31,11 +31,17 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 
 /* ─── Empty fallback ────────────────────────────────────────────── */
 
-function emptyPayload(siteUrl: string): DashboardPayload {
+function emptyPayload(
+  siteUrl: string,
+  dataStatus: DashboardPayload["dataStatus"] = "error",
+  dataMessage = "Unable to load analytics data.",
+): DashboardPayload {
   return {
     isDemo: false,
     siteUrl,
     lastUpdated: new Date().toISOString(),
+    dataStatus,
+    dataMessage,
     kpis: [
       { label: "Organic Traffic", value: "0", change: "0%", up: false },
       { label: "Keywords Top 10", value: "0", change: "0%", up: false },
@@ -67,7 +73,13 @@ export async function GET(request: NextRequest) {
 
   // Return empty payload when credentials are missing or no site is configured
   if (!token || !siteUrl) {
-    return NextResponse.json(emptyPayload(siteUrl || "unconfigured-site"));
+    return NextResponse.json(
+      emptyPayload(
+        siteUrl || "unconfigured-site",
+        "missing-gsc-auth",
+        "Google Search Console credentials are missing, invalid, or this site is not configured for access.",
+      ),
+    );
   }
 
   try {
@@ -139,6 +151,7 @@ export async function GET(request: NextRequest) {
     /* ── 2. KPIs (current vs previous 28-day period) ────────────── */
     const currRows: SearchRow[] = kwCurrRes.status === "fulfilled" ? (kwCurrRes.value.rows ?? []) : [];
     const prevRows: SearchRow[] = kwPrevRes.status === "fulfilled" ? (kwPrevRes.value.rows ?? []) : [];
+    const pageRows: SearchRow[] = pagesRes.status === "fulfilled" ? (pagesRes.value.rows ?? []) : [];
 
     const sum = (rows: SearchRow[], field: keyof Pick<SearchRow,"clicks"|"impressions"|"ctr"|"position">) =>
       rows.reduce((s, r) => s + r[field], 0);
@@ -198,6 +211,21 @@ export async function GET(request: NextRequest) {
     const trendRows: SearchRow[] = trendRes.status === "fulfilled" ? (trendRes.value.rows ?? []) : [];
     trendRows.sort((a, b) => a.keys[0].localeCompare(b.keys[0]));
 
+    const gscSettled = [trafficRes, kwCurrRes, kwPrevRes, trendRes, pagesRes];
+    const gscRejectedCount = gscSettled.filter((r) => r.status === "rejected").length;
+    const gscRowsAvailable =
+      rawTrafficRows.length + currRows.length + prevRows.length + trendRows.length + pageRows.length > 0;
+
+    const dataStatus: DashboardPayload["dataStatus"] =
+      gscRejectedCount === gscSettled.length || !gscRowsAvailable
+        ? "no-gsc-access-or-data"
+        : "ok";
+
+    const dataMessage =
+      dataStatus === "ok"
+        ? ""
+        : "No Google Search Console rows were returned for this website. Share the exact property with your service account or connect via OAuth, then re-scan.";
+
     const buckets: { sum: number; cnt: number }[] = Array.from({ length: 8 }, () => ({ sum: 0, cnt: 0 }));
     trendRows.forEach((row, i) => {
       const idx = Math.min(Math.floor((i / Math.max(trendRows.length, 1)) * 8), 7);
@@ -220,7 +248,6 @@ export async function GET(request: NextRequest) {
       : emptyPayload(siteUrl).auditData;
 
     /* ── 6. Top pages (content section) ────────────────────────── */
-    const pageRows: SearchRow[] = pagesRes.status === "fulfilled" ? (pagesRes.value.rows ?? []) : [];
     const perfScore = audit?.score ?? 70;
 
     const contentItems: DashboardPayload["contentItems"] = pageRows.length
@@ -251,6 +278,8 @@ export async function GET(request: NextRequest) {
       isDemo: false,
       siteUrl,
       lastUpdated: new Date().toISOString(),
+      dataStatus,
+      dataMessage,
       kpis,
       trafficData,
       rankingData,
@@ -263,6 +292,8 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     console.error("[/api/dashboard]", err);
     // On any error return empty live payload so the UI stays functional without fake data
-    return NextResponse.json(emptyPayload(siteUrl));
+    return NextResponse.json(
+      emptyPayload(siteUrl, "error", "Analytics pipeline failed for this URL. Please retry scan."),
+    );
   }
 }

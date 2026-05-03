@@ -43,6 +43,8 @@ export interface DashboardPayload {
   isDemo: boolean;
   siteUrl: string;
   lastUpdated: string; // ISO 8601
+  dataStatus?: "ok" | "missing-gsc-auth" | "no-gsc-access-or-data" | "error";
+  dataMessage?: string;
   kpis: KpiItem[];
   trafficData: TrafficPoint[];
   rankingData: RankingPoint[];

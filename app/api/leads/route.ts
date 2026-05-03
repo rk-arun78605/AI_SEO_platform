@@ -5,12 +5,11 @@ import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
 export const runtime = "nodejs";
 
-const requiredEnv = [
-  "AWS_REGION",
-] as const;
-
 function missingEnvVars(): string[] {
-  return requiredEnv.filter((name) => !process.env[name]);
+  if (process.env.LEADS_TABLE_NAME && !process.env.AWS_REGION) {
+    return ["AWS_REGION"];
+  }
+  return [];
 }
 
 function sanitize(value: unknown): string {
@@ -19,6 +18,39 @@ function sanitize(value: unknown): string {
 
 function isEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+const DISPOSABLE_EMAIL_DOMAINS = new Set([
+  "mailinator.com",
+  "guerrillamail.com",
+  "10minutemail.com",
+  "tempmail.com",
+  "yopmail.com",
+  "sharklasers.com",
+  "trashmail.com",
+  "getnada.com",
+  "maildrop.cc",
+]);
+
+function isDisposableEmail(email: string): boolean {
+  const domain = email.split("@")[1]?.toLowerCase() ?? "";
+  return DISPOSABLE_EMAIL_DOMAINS.has(domain);
+}
+
+function normalizePhone(value: string): string {
+  return value.replace(/[^0-9+]/g, "");
+}
+
+function isJunkPhone(value: string): boolean {
+  const phone = normalizePhone(value).replace(/^\+/, "");
+  if (phone.length < 8 || phone.length > 15) return true;
+  if (/^(\d)\1{7,14}$/.test(phone)) return true;
+
+  const ascending = "0123456789";
+  const descending = "9876543210";
+  if (ascending.includes(phone) || descending.includes(phone)) return true;
+
+  return false;
 }
 
 function isUrl(value: string): boolean {
@@ -60,6 +92,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
   }
 
+  if (isDisposableEmail(email)) {
+    return NextResponse.json(
+      { error: "Disposable email domains are not allowed" },
+      { status: 400 },
+    );
+  }
+
+  if (isJunkPhone(phone)) {
+    return NextResponse.json(
+      { error: "Please enter a valid mobile number" },
+      { status: 400 },
+    );
+  }
+
   if (!isUrl(website)) {
     return NextResponse.json(
       { error: "Website must be a valid http/https URL" },
@@ -94,7 +140,7 @@ export async function POST(request: Request) {
     leadId,
     name,
     email: email.toLowerCase(),
-    phone,
+    phone: normalizePhone(phone),
     website,
     source: "homepage-free-audit",
     createdAt: now,

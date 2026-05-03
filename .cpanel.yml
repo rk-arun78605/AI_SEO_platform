@@ -1,0 +1,7 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/indrxkhf/ai-seo-platform
+    - cd $DEPLOYPATH
+    - npm ci --production=false
+    - npm run build

@@ -30,6 +30,13 @@ type SiteIntelPayload = {
     seo: number;
     overall: number;
   };
+  eeatBenchmark: {
+    competitorAverage: number;
+    yourScore: number;
+    gap: number;
+    topCompetitorBand: "strong" | "moderate" | "weak";
+    notes: string;
+  };
   modelSource: "aws-bedrock" | "heuristic" | "ensemble";
   modelsUsed: Array<{
     id: string;
@@ -400,6 +407,33 @@ function seoRecommendations(topic: string, keywords: string[]): string[] {
   ];
 }
 
+function buildEeatBenchmark(topic: string, kpis: SiteIntelPayload["kpis"]): SiteIntelPayload["eeatBenchmark"] {
+  const topicBase: Record<string, number> = {
+    "Healthcare / Medical": 82,
+    Ecommerce: 74,
+    "SaaS / Software": 77,
+    "Services / Agency": 72,
+    "Content / Publishing": 75,
+    "General Business": 70,
+  };
+
+  const competitorAverage = topicBase[topic] ?? 70;
+  const yourScore = Math.round((kpis.technical + kpis.functional + kpis.user + kpis.seo) / 4);
+  const gap = competitorAverage - yourScore;
+  const topCompetitorBand = competitorAverage >= 80 ? "strong" : competitorAverage >= 70 ? "moderate" : "weak";
+
+  return {
+    competitorAverage,
+    yourScore,
+    gap,
+    topCompetitorBand,
+    notes:
+      gap <= 0
+        ? "Your E-E-A-T profile is at or above estimated competitor baseline."
+        : `Estimated E-E-A-T gap of ${gap} points vs ranking competitors in ${topic}.`,
+  };
+}
+
 function hasRegex(html: string, re: RegExp): boolean {
   return re.test(html);
 }
@@ -736,6 +770,7 @@ export async function GET(request: NextRequest) {
       summary,
       recommendations,
       kpis: mlInsights.kpis,
+      eeatBenchmark: buildEeatBenchmark(primaryTopic, mlInsights.kpis),
       modelSource: mlInsights.modelSource,
       modelsUsed: mlInsights.modelsUsed,
       keywordClusters,

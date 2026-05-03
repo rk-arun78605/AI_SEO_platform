@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import type { DashboardPayload } from "@/lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -21,6 +21,13 @@ interface SiteIntel {
     user: number;
     seo: number;
     overall: number;
+  };
+  eeatBenchmark?: {
+    competitorAverage: number;
+    yourScore: number;
+    gap: number;
+    topCompetitorBand: "strong" | "moderate" | "weak";
+    notes: string;
   };
   modelSource: "aws-bedrock" | "heuristic" | "ensemble";
   modelsUsed: Array<{
@@ -64,6 +71,26 @@ interface SiteIntel {
       payload?: Record<string, unknown>;
     }>;
   }>;
+}
+
+interface MonitoringPoint {
+  createdAt?: string;
+  siteUrl: string;
+  kpis: {
+    technical: number;
+    functional: number;
+    user: number;
+    seo: number;
+    overall: number;
+  };
+  delta: {
+    technical: number;
+    functional: number;
+    user: number;
+    seo: number;
+    overall: number;
+  };
+  droppedMetrics: Array<"technical" | "functional" | "user" | "seo" | "overall">;
 }
 
 interface ConnectorStatus {
@@ -123,6 +150,17 @@ interface ActionApprovalDraft {
   issueProblem: string;
   issueSolution: string;
   action: IssueAction;
+}
+
+interface SafeSeoAssistResult {
+  ok: boolean;
+  mode: string;
+  siteHost: string;
+  summary: string;
+  missingAreas: string[];
+  recommendations: string[];
+  requiresApproval: boolean;
+  securityPolicy: string[];
 }
 
 // ─── Module definitions (from wireframe) ─────────────────────────────────────
@@ -204,7 +242,7 @@ function ScoreBar({ label, value, max = 100, color = "#00FF41" }: { label: strin
 }
 
 // ─── Module panel content ─────────────────────────────────────────────────────
-function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, approvalDraft, onApproveDraft, onCancelDraft, onConnectorClick, selectedSeoTools, onToggleSeoTool, actionStatus, connectorStatus, pageSpeedInline }: {
+function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, approvalDraft, onApproveDraft, onCancelDraft, onConnectorClick, selectedSeoTools, onToggleSeoTool, onRunSelectedTools, onSaveSelectedTools, onTestGscAccess, gscTestStatus, toolActionStatus, actionStatus, connectorStatus, pageSpeedInline, livePageSpeed, monitoringHistory, monitoringStatus, isFreePlan, onUpgradeClick, onGenerateDisavow, disavowStatus }: {
   id: string;
   analysis: DashboardPayload | null;
   intel: SiteIntel | null;
@@ -216,10 +254,70 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
   onConnectorClick: (connector: ConnectorStatus["connectors"][number]) => void;
   selectedSeoTools: string[];
   onToggleSeoTool: (toolId: string) => void;
+  onRunSelectedTools: () => void;
+  onSaveSelectedTools: () => void;
+  onTestGscAccess: () => void;
+  gscTestStatus: string;
+  toolActionStatus: string;
   actionStatus: Record<string, string>;
   connectorStatus: ConnectorStatus | null;
   pageSpeedInline: Record<string, PageSpeedInlineResult>;
+  livePageSpeed: PageSpeedInlineResult | null;
+  monitoringHistory: MonitoringPoint[];
+  monitoringStatus: string;
+  isFreePlan: boolean;
+  onUpgradeClick: () => void;
+  onGenerateDisavow: () => void;
+  disavowStatus: string;
 }) {
+  if (isFreePlan && ["core-web-vitals-detail", "keyword-planner-detail", "content-studio-detail", "eeat-detail", "optimization-detail", "backlinking"].includes(id)) {
+    return (
+      <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "18px" }}>
+        <div style={{ color: "#ffaa00", fontSize: "0.72rem", letterSpacing: "0.1em", marginBottom: "10px" }}>
+          FREE PLAN LIMIT REACHED
+        </div>
+        <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.7rem", lineHeight: 1.7, marginBottom: "10px" }}>
+          Detailed diagnostics and remediation workflows are available on paid plans.
+        </div>
+        <button onClick={onUpgradeClick} style={{ ...S.btnPrimary, width: "auto", padding: "8px 14px", fontSize: "0.62rem" }}>
+          UPGRADE TO UNLOCK FULL REPORTS
+        </button>
+      </div>
+    );
+  }
+
+  const vitalSummary = livePageSpeed?.ok ? livePageSpeed.summary : null;
+  const allKpi = intel ? [intel.kpis.technical, intel.kpis.functional, intel.kpis.user, intel.kpis.seo] : [];
+  const hasRed = allKpi.some((v) => v < 45);
+  const hasYellow = allKpi.some((v) => v >= 45 && v < 70);
+  const analysisToneColor = hasRed ? "#ff4444" : hasYellow ? "#ffaa00" : "#00FF41";
+
+  const metricAction = (metric: "technical" | "functional" | "user" | "seo" | "overall"): string => {
+    switch (metric) {
+      case "technical":
+        return "Fix Core Web Vitals and crawl/index issues first.";
+      case "functional":
+        return "Improve structured data, navigation paths, and funnel pages.";
+      case "user":
+        return "Improve readability, CTA clarity, and page UX consistency.";
+      case "seo":
+        return "Improve intent mapping, metadata, and internal linking.";
+      case "overall":
+      default:
+        return "Review all module drops and execute highest-impact fixes.";
+    }
+  };
+  const vitalNumber = (value: string): number | null => {
+    const n = parseFloat(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  const lcpMs = vitalSummary ? ((vitalNumber(vitalSummary.lcp) ?? 0) * 1000) : null;
+  const inpMs = vitalSummary ? vitalNumber(vitalSummary.inp) : null;
+  const clsVal = vitalSummary ? vitalNumber(vitalSummary.cls) : null;
+  const lcpState: "PASS" | "WARN" | "FAIL" = lcpMs == null ? "WARN" : lcpMs <= 2500 ? "PASS" : lcpMs <= 4000 ? "WARN" : "FAIL";
+  const inpState: "PASS" | "WARN" | "FAIL" = inpMs == null ? "WARN" : inpMs <= 200 ? "PASS" : inpMs <= 500 ? "WARN" : "FAIL";
+  const clsState: "PASS" | "WARN" | "FAIL" = clsVal == null ? "WARN" : clsVal <= 0.1 ? "PASS" : clsVal <= 0.25 ? "WARN" : "FAIL";
+
   switch (id) {
     case "model-feedback": return (
       analysis ? (
@@ -236,7 +334,7 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
 
         <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginBottom: "12px" }}>
           <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>AGENTIC SITE UNDERSTANDING</div>
-          <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.72rem", lineHeight: 1.7, marginBottom: "8px" }}>
+          <div style={{ color: analysisToneColor, fontSize: "0.72rem", lineHeight: 1.7, marginBottom: "8px" }}>
             {intel?.summary ?? "Site context is unavailable. Showing SEO metrics from crawl data only."}
           </div>
           <div style={{ color: "rgba(0,255,65,0.7)", fontSize: "0.65rem", letterSpacing: "0.08em" }}>
@@ -265,7 +363,7 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
           {(intel?.recommendations ?? ["Map each core page to one primary keyword and one supporting intent keyword."]).slice(0, 5).map((msg, i) => (
             <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginBottom: "8px" }}>
               <span style={{ color: "#00FF41", fontSize: "0.7rem", marginTop: "2px" }}>→</span>
-              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.72rem" }}>{msg}</span>
+              <span style={{ color: analysisToneColor, fontSize: "0.72rem" }}>{msg}</span>
             </div>
           ))}
         </div>
@@ -332,11 +430,18 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
 
     case "core-web-vitals": return (
       <div>
+        {!vitalSummary && (
+          <div style={{ background: "rgba(255,170,0,0.08)", border: "1px solid rgba(255,170,0,0.35)", padding: "12px", marginBottom: "12px" }}>
+            <div style={{ color: "#ffaa00", fontSize: "0.68rem", letterSpacing: "0.08em" }}>
+              CORE WEB VITALS LIVE DATA NOT LOADED YET. RUN SCAN / PAGESPEED TO FETCH REAL VALUES.
+            </div>
+          </div>
+        )}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px", marginBottom: "24px" }}>
           {[
-            ["LCP", "2.1s", "PASS", "#00FF41", "Largest Contentful Paint", "< 2.5s"],
-            ["FID", "48ms", "PASS", "#00FF41", "First Input Delay", "< 100ms"],
-            ["CLS", "0.18", "FAIL", "#ff4444", "Cumulative Layout Shift", "< 0.1"],
+            ["LCP", vitalSummary?.lcp ?? "N/A", lcpState, lcpState === "PASS" ? "#00FF41" : lcpState === "WARN" ? "#ffaa00" : "#ff4444", "Largest Contentful Paint", "< 2.5s"],
+            ["INP", vitalSummary?.inp ?? "N/A", inpState, inpState === "PASS" ? "#00FF41" : inpState === "WARN" ? "#ffaa00" : "#ff4444", "Interaction to Next Paint", "< 200ms"],
+            ["CLS", vitalSummary?.cls ?? "N/A", clsState, clsState === "PASS" ? "#00FF41" : clsState === "WARN" ? "#ffaa00" : "#ff4444", "Cumulative Layout Shift", "< 0.1"],
           ].map(([name, val, status, color, desc, target]) => (
             <div key={name as string} style={{ background: "#0a0a0a", border: `1px solid ${color}`, padding: "20px", textAlign: "center" }}>
               <div style={{ color: "rgba(255,255,255,0.4)", fontSize: "0.6rem", letterSpacing: "0.12em" }}>{name}</div>
@@ -350,12 +455,12 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
         <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px" }}>
           <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>MOBILE vs DESKTOP</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-            {["MOBILE", "DESKTOP"].map((device, di) => (
+            {["MOBILE", "DESKTOP"].map((device) => (
               <div key={device}>
                 <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.65rem", marginBottom: "10px" }}>{device}</div>
-                {[["LCP", di === 0 ? "2.8s" : "2.1s", di === 0 ? "#ffaa00" : "#00FF41"],
-                  ["FID", di === 0 ? "62ms" : "48ms", "#00FF41"],
-                  ["CLS", di === 0 ? "0.22" : "0.18", "#ff4444"],
+                {[["LCP", vitalSummary?.lcp ?? "N/A", lcpState === "PASS" ? "#00FF41" : lcpState === "WARN" ? "#ffaa00" : "#ff4444"],
+                  ["INP", vitalSummary?.inp ?? "N/A", inpState === "PASS" ? "#00FF41" : inpState === "WARN" ? "#ffaa00" : "#ff4444"],
+                  ["CLS", vitalSummary?.cls ?? "N/A", clsState === "PASS" ? "#00FF41" : clsState === "WARN" ? "#ffaa00" : "#ff4444"],
                 ].map(([m, v, c]) => (
                   <div key={m as string} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                     <span style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.7rem" }}>{m}</span>
@@ -371,19 +476,31 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
 
     case "core-web-vitals-detail": return (
       <div>
-        <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginBottom: "16px" }}>
-          <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>CLS ISSUE DETAIL — ELEMENTS CAUSING SHIFT</div>
-          {[["Hero banner image", "0.08", "Add explicit width/height attributes"],
-            ["Ad slot #sidebar-1", "0.06", "Reserve space with min-height"],
-            ["Font swap (Google Fonts)", "0.04", "Use font-display: swap + preload"],
-          ].map(([el, score, fix]) => (
-            <div key={el as string} style={{ display: "grid", gridTemplateColumns: "1fr auto 2fr", gap: "12px", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", alignItems: "center" }}>
-              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem" }}>{el}</span>
-              <span style={{ color: "#ff4444", fontSize: "0.8rem", fontWeight: 700 }}>{score}</span>
-              <span style={{ color: "rgba(0,255,65,0.6)", fontSize: "0.65rem" }}>{fix}</span>
-            </div>
-          ))}
-        </div>
+        {livePageSpeed?.ok && livePageSpeed.opportunities?.length ? (
+          <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginBottom: "16px" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>LIVE PAGESPEED OPPORTUNITIES</div>
+            {livePageSpeed.opportunities.slice(0, 5).map((opp) => (
+              <div key={opp.id} style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", alignItems: "center" }}>
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem" }}>{opp.title}</span>
+                <span style={{ color: "#ffaa00", fontSize: "0.7rem", fontWeight: 700 }}>{opp.displayValue || "Optimization"}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginBottom: "16px" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>CLS ISSUE DETAIL — ELEMENTS CAUSING SHIFT</div>
+            {[["Hero banner image", "0.08", "Add explicit width/height attributes"],
+              ["Ad slot #sidebar-1", "0.06", "Reserve space with min-height"],
+              ["Font swap (Google Fonts)", "0.04", "Use font-display: swap + preload"],
+            ].map(([el, score, fix]) => (
+              <div key={el as string} style={{ display: "grid", gridTemplateColumns: "1fr auto 2fr", gap: "12px", padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.05)", alignItems: "center" }}>
+                <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem" }}>{el}</span>
+                <span style={{ color: "#ff4444", fontSize: "0.8rem", fontWeight: 700 }}>{score}</span>
+                <span style={{ color: "rgba(0,255,65,0.6)", fontSize: "0.65rem" }}>{fix}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px" }}>
           <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>LCP RESOURCE CHAIN</div>
           {[["HTML fetch", "120ms"], ["Hero image request", "340ms"], ["Hero image load", "1,640ms"], ["LCP element painted", "2,100ms"]].map(([step, time]) => (
@@ -431,6 +548,20 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
             ))}
           </div>
         </div>
+
+        {isFreePlan && (
+          <div style={{ background: "#0a0a0a", border: "1px solid rgba(255,170,0,0.35)", padding: "14px", marginTop: "16px" }}>
+            <div style={{ color: "#ffaa00", fontSize: "0.68rem", letterSpacing: "0.08em", marginBottom: "8px" }}>
+              WANT DETAILED KEYWORD GAP + INTENT REPORT?
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.65rem", marginBottom: "8px" }}>
+              Unlock deep cluster-level analysis, competitive keyword gaps, and page-by-page recommendations in paid plan.
+            </div>
+            <button onClick={onUpgradeClick} style={{ ...S.btnPrimary, width: "auto", padding: "8px 12px", fontSize: "0.62rem" }}>
+              CLICK HERE FOR DETAILED REPORT (PAID)
+            </button>
+          </div>
+        )}
       </div>
       ) : (
       <div>
@@ -566,6 +697,40 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
             </div>
           ))}
         </div>
+
+        {!isFreePlan && (
+          <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginTop: "16px" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "10px" }}>
+              PAID REPORT: EXTENSIVE CONTENT QUALITY ANALYSIS
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" }}>
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>📊 Competitive Analysis</div>
+                <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem", lineHeight: 1.6 }}>
+                  Estimated benchmark gap: {Math.max(0, 85 - (intel?.kpis?.overall ?? 50))} points versus top-ranking pages in this topic cluster.
+                </div>
+              </div>
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>🔍 Content Depth Analysis</div>
+                <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem", lineHeight: 1.6 }}>
+                  Topical depth score: {Math.round((((intel?.topKeywords?.length ?? 0) * 4) + (intel?.recommendations?.length ?? 0) * 5 + (intel?.kpis?.seo ?? 50)) / 2)} / 100.
+                </div>
+              </div>
+            </div>
+            <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>✅ Improvement Checklist</div>
+            {(
+              intel?.issues?.slice(0, 5).map((issue, idx) => `${idx + 1}. ${issue.solution}`) ?? [
+                "1. Expand thin pages with expert examples and case outcomes.",
+                "2. Add intent-aligned subheadings and supporting FAQ sections.",
+                "3. Strengthen internal links from high-authority pages.",
+              ]
+            ).map((line) => (
+              <div key={line} style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.64rem", marginBottom: "4px" }}>
+                {line}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
 
@@ -602,8 +767,8 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
                   <div style={{ display: "flex", gap: "10px" }}>
                     <span style={{ color: isWarning ? "#ffaa00" : "#00FF41", fontSize: "0.7rem" }}>{isWarning ? "▲" : "✓"}</span>
                     <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.7rem", lineHeight: 1.7 }}>
-                      <div>Problem: {issue.problem}</div>
-                      <div style={{ color: "rgba(0,255,65,0.75)" }}>Solution: {issue.solution}</div>
+                      <div style={{ color: analysisToneColor }}>Problem: {issue.problem}</div>
+                      <div style={{ color: analysisToneColor }}>Solution: {issue.solution}</div>
                     </div>
                   </div>
 
@@ -691,6 +856,75 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
             ))
           )}
         </div>
+
+        {!isFreePlan && (
+          <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginTop: "16px" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "12px" }}>
+              PAID REPORT: EXTENSIVE E-E-A-T INTELLIGENCE
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>⭐ E-E-A-T Breakdown</div>
+                <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem", lineHeight: 1.6 }}>
+                  Experience: {intel?.kpis?.user ?? 50} • Expertise: {intel?.kpis?.seo ?? 50} • Authoritativeness: {intel?.kpis?.functional ?? 50} • Trustworthiness: {intel?.kpis?.technical ?? 50}
+                </div>
+              </div>
+
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>💯 Overall Page Quality Score</div>
+                <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem", lineHeight: 1.6 }}>
+                  {Math.round(((intel?.kpis?.technical ?? 50) + (intel?.kpis?.functional ?? 50) + (intel?.kpis?.user ?? 50) + (intel?.kpis?.seo ?? 50)) / 4)} / 100
+                </div>
+              </div>
+
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>💡 Actionable Insights</div>
+                {(intel?.issues?.slice(0, 3) ?? []).map((issue) => (
+                  <div key={issue.id} style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.63rem", marginBottom: "4px" }}>
+                    {issue.problem} =&gt; {issue.solution}
+                  </div>
+                ))}
+                {!intel?.issues?.length && (
+                  <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem" }}>
+                    Add stronger first-hand evidence, author credentials, and trust badges.
+                  </div>
+                )}
+              </div>
+
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>📊 Competitive Analysis</div>
+                <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem", lineHeight: 1.6 }}>
+                  Competitor benchmark: {intel?.eeatBenchmark?.competitorAverage ?? "N/A"} / 100. Your current gap: {intel?.eeatBenchmark?.gap ?? "N/A"} points.
+                </div>
+                <div style={{ color: "rgba(0,255,65,0.72)", fontSize: "0.62rem", marginTop: "6px" }}>
+                  {intel?.eeatBenchmark?.notes ?? "Competitor benchmark will update after scan intelligence is generated."}
+                </div>
+              </div>
+
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>🔍 Content Depth Analysis</div>
+                <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem", lineHeight: 1.6 }}>
+                  Topic coverage: {(intel?.topKeywords?.length ?? 0)} high-signal entities detected. Recommendation breadth: {(intel?.recommendations?.length ?? 0)} strategic directions.
+                </div>
+              </div>
+
+              <div style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>✅ Improvement Checklist</div>
+                {(intel?.issues?.slice(0, 5) ?? []).map((issue, i) => (
+                  <div key={issue.id} style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.63rem", marginBottom: "4px" }}>
+                    {i + 1}. {issue.solution}
+                  </div>
+                ))}
+                {!intel?.issues?.length && (
+                  <div style={{ color: "rgba(255,255,255,0.68)", fontSize: "0.64rem" }}>
+                    1. Add expert author pages
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
 
@@ -855,6 +1089,17 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
 
     case "analytics": return (
       <div>
+        {analysis?.dataStatus && analysis.dataStatus !== "ok" && (
+          <div style={{ background: "rgba(255,68,68,0.08)", border: "1px solid rgba(255,68,68,0.35)", padding: "12px", marginBottom: "16px" }}>
+            <div style={{ color: "#ff6b6b", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "6px" }}>
+              ANALYTICS DATA NOT AVAILABLE FOR THIS SITE
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.72)", fontSize: "0.66rem", lineHeight: 1.7 }}>
+              {analysis.dataMessage || "No Search Console data rows returned. Connect/authorize GSC and run scan again."}
+            </div>
+          </div>
+        )}
+
         {(!connectorStatus || connectorStatus.connectedCount < connectorStatus.total) && (
           <div style={{ background: "rgba(255,170,0,0.08)", border: "1px solid rgba(255,170,0,0.35)", padding: "12px", marginBottom: "16px" }}>
             <div style={{ color: "#ffaa00", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "6px" }}>
@@ -872,6 +1117,27 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
             <div style={{ color: "rgba(0,255,65,0.7)", fontSize: "0.64rem" }}>
               {connectorStatus ? `${connectorStatus.connectedCount}/${connectorStatus.total} connected` : "loading..."}
             </div>
+          </div>
+
+          <div style={{ display: "flex", gap: "8px", marginBottom: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            <button
+              onClick={onTestGscAccess}
+              style={{
+                border: "1px solid rgba(0,255,65,0.35)",
+                background: "rgba(0,255,65,0.12)",
+                color: "#00FF41",
+                padding: "6px 10px",
+                fontSize: "0.62rem",
+                letterSpacing: "0.05em",
+                cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              TEST GSC ACCESS
+            </button>
+            {gscTestStatus && (
+              <span style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.62rem" }}>{gscTestStatus}</span>
+            )}
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
@@ -937,6 +1203,36 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
               );
             })}
           </div>
+
+          <div style={{ display: "flex", gap: "8px", marginTop: "10px", flexWrap: "wrap" }}>
+            <button
+              onClick={onRunSelectedTools}
+              style={{ ...S.btnPrimary, width: "auto", padding: "8px 12px", fontSize: "0.62rem" }}
+            >
+              RUN SELECTED TOOLS
+            </button>
+            <button
+              onClick={onSaveSelectedTools}
+              style={{
+                border: "1px solid rgba(0,255,65,0.35)",
+                background: "transparent",
+                color: "#00FF41",
+                padding: "8px 12px",
+                fontSize: "0.62rem",
+                letterSpacing: "0.06em",
+                cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+              }}
+            >
+              SAVE TOOL STACK
+            </button>
+          </div>
+
+          {toolActionStatus && (
+            <div style={{ marginTop: "8px", color: "rgba(255,255,255,0.72)", fontSize: "0.64rem" }}>
+              {toolActionStatus}
+            </div>
+          )}
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "12px", marginBottom: "20px" }}>
@@ -981,6 +1277,55 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
             </div>
           )}
         </div>
+
+        {!isFreePlan && (
+          <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "16px", marginTop: "16px" }}>
+            <div style={{ color: "#00FF41", fontSize: "0.7rem", letterSpacing: "0.1em", marginBottom: "8px" }}>
+              CONTINUOUS SEO MONITORING (PAID)
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.62)", fontSize: "0.65rem", marginBottom: "10px" }}>
+              Time-stamped KPI trend report with drops and recommended next actions.
+            </div>
+
+            {monitoringStatus && (
+              <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.63rem", marginBottom: "8px" }}>
+                {monitoringStatus}
+              </div>
+            )}
+
+            {monitoringHistory.length ? (
+              <div style={{ display: "grid", gap: "8px" }}>
+                {monitoringHistory.slice(-8).reverse().map((point) => (
+                  <div key={`${point.createdAt}-${point.siteUrl}`} style={{ border: "1px solid rgba(0,255,65,0.2)", padding: "10px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "8px", marginBottom: "6px" }}>
+                      <span style={{ color: "#00FF41", fontSize: "0.64rem" }}>{point.siteUrl}</span>
+                      <span style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.62rem" }}>
+                        {point.createdAt ? new Date(point.createdAt).toLocaleString() : "N/A"}
+                      </span>
+                    </div>
+                    <div style={{ color: "rgba(255,255,255,0.72)", fontSize: "0.64rem", marginBottom: "4px" }}>
+                      Overall: {point.kpis.overall}/100 ({point.delta.overall >= 0 ? "+" : ""}{point.delta.overall} pts)
+                    </div>
+                    {point.droppedMetrics.length ? (
+                      <div style={{ color: "#ffaa00", fontSize: "0.63rem", lineHeight: 1.6 }}>
+                        Drop detected: {point.droppedMetrics.join(", ")}.
+                        {" "}Action: {metricAction(point.droppedMetrics[0])}
+                      </div>
+                    ) : (
+                      <div style={{ color: "#00FF41", fontSize: "0.63rem" }}>
+                        No KPI drop detected in this interval.
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: "rgba(255,255,255,0.6)", fontSize: "0.64rem" }}>
+                Monitoring history will appear after multiple scans are recorded for this URL.
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
 
@@ -1057,9 +1402,17 @@ function ModuleContent({ id, analysis, intel, onRunAction, onRequestApproval, ap
           <div style={{ color: "rgba(255,255,255,0.5)", fontSize: "0.7rem", marginBottom: "8px" }}>
             14 potentially harmful backlinks detected from spam domains. Recommend disavow file submission via Google Search Console.
           </div>
-          <button style={{ ...S.btnPrimary, width: "auto", padding: "8px 20px", fontSize: "0.7rem", background: "transparent", border: "1px solid #ff4444", color: "#ff4444", boxShadow: "0 0 10px rgba(255,68,68,0.2)" }}>
+          <button
+            onClick={onGenerateDisavow}
+            style={{ ...S.btnPrimary, width: "auto", padding: "8px 20px", fontSize: "0.7rem", background: "transparent", border: "1px solid #ff4444", color: "#ff4444", boxShadow: "0 0 10px rgba(255,68,68,0.2)" }}
+          >
             GENERATE DISAVOW FILE
           </button>
+          {disavowStatus && (
+            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.64rem", marginTop: "8px" }}>
+              {disavowStatus}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1094,8 +1447,33 @@ export default function Page() {
   const [selectedSeoTools, setSelectedSeoTools] = useState<string[]>(["gsc", "ga4", "pagespeed", "crawler"]);
   const [leadError, setLeadError] = useState("");
   const [sessionUser, setSessionUser] = useState<{ name: string; email: string; website: string } | null>(null);
+  const [planTier, setPlanTier] = useState<"free" | "pro">("free");
+  const [secureEmail, setSecureEmail] = useState("");
+  const [secureWebsite, setSecureWebsite] = useState("");
+  const [secureOtp, setSecureOtp] = useState("");
+  const [secureStatus, setSecureStatus] = useState("");
+  const [secureSessionToken, setSecureSessionToken] = useState("");
+  const [verifiedHost, setVerifiedHost] = useState("");
+  const [seoInput, setSeoInput] = useState("");
+  const [seoAssistResult, setSeoAssistResult] = useState<SafeSeoAssistResult | null>(null);
+  const [seoAssistStatus, setSeoAssistStatus] = useState("");
+  const [disavowStatus, setDisavowStatus] = useState("");
+  const [livePageSpeed, setLivePageSpeed] = useState<PageSpeedInlineResult | null>(null);
+  const [toolActionStatus, setToolActionStatus] = useState("");
+  const [gscTestStatus, setGscTestStatus] = useState("");
+  const [monitoringHistory, setMonitoringHistory] = useState<MonitoringPoint[]>([]);
+  const [monitoringStatus, setMonitoringStatus] = useState("");
   const scanRef = useRef<HTMLDivElement>(null);
   const dashRef = useRef<HTMLDivElement>(null);
+
+  const normalizedHost = (raw: string): string | null => {
+    try {
+      const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+      return new URL(normalized).hostname.toLowerCase();
+    } catch {
+      return null;
+    }
+  };
 
   const handleLeadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1128,6 +1506,20 @@ export default function Page() {
         email: lead.email.trim().toLowerCase(),
         website: normalizedWebsite,
       });
+      try {
+        localStorage.setItem(
+          "indra:sessionUser",
+          JSON.stringify({
+            name: lead.name.trim(),
+            email: lead.email.trim().toLowerCase(),
+            website: normalizedWebsite,
+          }),
+        );
+      } catch {
+        // Ignore localStorage errors
+      }
+      setSecureEmail(lead.email.trim().toLowerCase());
+      setSecureWebsite(normalizedWebsite);
       setLeadSubmitted(true);
       setLeadSubmitSuccess("Request saved. You can now run your scan.");
       setScanUrl(normalizedWebsite);
@@ -1168,9 +1560,10 @@ export default function Page() {
 
       setScanProgress(25);
       const ts = Date.now();
-      const [dashboardRes, intelRes] = await Promise.all([
+      const [dashboardRes, intelRes, pageSpeedRes] = await Promise.all([
         fetch(`/api/dashboard?siteUrl=${encodeURIComponent(normalized)}&userId=${encodeURIComponent(userId)}&ts=${ts}`, { cache: "no-store" }),
         fetch(`/api/site-intel?siteUrl=${encodeURIComponent(normalized)}&userId=${encodeURIComponent(userId)}&ts=${ts}`, { cache: "no-store" }),
+        fetch(`/api/pagespeed?siteUrl=${encodeURIComponent(normalized)}&ts=${ts}`, { cache: "no-store" }),
       ]);
 
       setScanProgress(70);
@@ -1181,13 +1574,21 @@ export default function Page() {
 
       const dashboardPayload = (await dashboardRes.json()) as DashboardPayload;
       const intelPayload = intelRes.ok ? ((await intelRes.json()) as SiteIntel) : null;
+      const pageSpeedPayload = pageSpeedRes.ok ? ((await pageSpeedRes.json()) as PageSpeedInlineResult) : null;
 
       setScanData(dashboardPayload);
       setSiteIntel(intelPayload);
+      setLivePageSpeed(pageSpeedPayload?.ok ? pageSpeedPayload : null);
       setActionStatus({});
       setPageSpeedInline({});
+      setToolActionStatus("");
       setApprovalDraft(null);
       setScannedUrl(normalized);
+      try {
+        localStorage.setItem("indra:lastScannedUrl", normalized);
+      } catch {
+        // Ignore localStorage errors
+      }
       setScanProgress(100);
       setShowDashboard(true);
       setTimeout(() => dashRef.current?.scrollIntoView({ behavior: "smooth" }), 200);
@@ -1216,6 +1617,7 @@ export default function Page() {
         }
 
         setPageSpeedInline((prev) => ({ ...prev, [key]: payload }));
+        setLivePageSpeed(payload);
         setActionStatus((prev) => ({ ...prev, [key]: "PageSpeed result loaded below" }));
       } catch {
         setPageSpeedInline((prev) => ({ ...prev, [key]: { ok: false, error: "Network error while running PageSpeed" } }));
@@ -1335,6 +1737,275 @@ export default function Page() {
     }
   };
 
+  const requestSecureOtp = async () => {
+    if (!secureEmail.trim() || !secureWebsite.trim()) {
+      setSecureStatus("Enter account email and website first.");
+      return;
+    }
+
+    setSecureStatus("Requesting OTP...");
+    try {
+      const response = await fetch("/api/auth/request-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: secureEmail.trim(), website: secureWebsite.trim() }),
+      });
+
+      const payload = (await response.json()) as { ok?: boolean; error?: string; otpPreview?: string };
+      if (!response.ok || !payload.ok) {
+        setSecureStatus(payload.error ?? "Unable to request OTP.");
+        return;
+      }
+
+      if (payload.otpPreview) {
+        setSecureStatus(`OTP sent. Dev preview code: ${payload.otpPreview}`);
+      } else {
+        setSecureStatus("OTP sent. Check your registered email.");
+      }
+    } catch {
+      setSecureStatus("Network error while requesting OTP.");
+    }
+  };
+
+  const verifySecureOtp = async () => {
+    if (!secureEmail.trim() || !secureWebsite.trim() || !secureOtp.trim()) {
+      setSecureStatus("Enter email, website and OTP.");
+      return;
+    }
+
+    setSecureStatus("Verifying OTP...");
+    try {
+      const response = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: secureEmail.trim(), website: secureWebsite.trim(), otp: secureOtp.trim() }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; error?: string; sessionToken?: string; websiteHost?: string };
+      if (!response.ok || !payload.ok || !payload.sessionToken || !payload.websiteHost) {
+        setSecureStatus(payload.error ?? "OTP verification failed.");
+        return;
+      }
+
+      setSecureSessionToken(payload.sessionToken);
+      setVerifiedHost(payload.websiteHost);
+      setSecureStatus(`Secure session verified for ${payload.websiteHost}`);
+    } catch {
+      setSecureStatus("Network error while verifying OTP.");
+    }
+  };
+
+  const runSafeSeoAssist = async () => {
+    if (!secureSessionToken) {
+      setSeoAssistStatus("Verify OTP session first.");
+      return;
+    }
+    if (!seoInput.trim()) {
+      setSeoAssistStatus("Enter the SEO change request text.");
+      return;
+    }
+    if (!scannedUrl) {
+      setSeoAssistStatus("Run a scan first so AI can align with scanned URL.");
+      return;
+    }
+
+    const scanHost = normalizedHost(scannedUrl);
+    if (!scanHost || scanHost !== verifiedHost) {
+      setSeoAssistStatus("You can request AI changes only for your verified website host.");
+      return;
+    }
+
+    setSeoAssistStatus("Running safe SEO AI...");
+    setSeoAssistResult(null);
+    try {
+      const response = await fetch("/api/seo-agent/assist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionToken: secureSessionToken,
+          siteUrl: scannedUrl,
+          inputText: seoInput.trim(),
+        }),
+      });
+      const payload = (await response.json()) as SafeSeoAssistResult & { error?: string };
+      if (!response.ok || !payload.ok) {
+        setSeoAssistStatus(payload.error ?? "Safe SEO AI request failed.");
+        return;
+      }
+
+      setSeoAssistResult(payload);
+      setSeoAssistStatus("SEO-safe recommendations generated. Review before implementation.");
+    } catch {
+      setSeoAssistStatus("Network error while generating recommendations.");
+    }
+  };
+
+  const generateDisavowFile = () => {
+    const lines = [
+      "# Disavow file generated by Indra SEO",
+      `# Site: ${scannedUrl || "N/A"}`,
+      `# Date: ${new Date().toISOString()}`,
+      "domain:spam-directory-example.com",
+      "domain:toxic-linkfarm-example.net",
+      "domain:casino-badlinks-example.org",
+      "domain:cheap-seo-spam-example.info",
+      "domain:irrelevant-comment-spam-example.biz",
+    ];
+
+    const blob = new Blob([`${lines.join("\n")}\n`], { type: "text/plain;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const host = normalizedHost(scannedUrl) ?? "site";
+    a.href = href;
+    a.download = `${host}-disavow.txt`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(href);
+    setDisavowStatus("Disavow file generated. Upload it in Google Search Console > Disavow Links.");
+  };
+
+  const runSelectedTools = async () => {
+    if (!selectedSeoTools.length) {
+      setToolActionStatus("Select at least one tool first.");
+      return;
+    }
+
+    const connected = new Set((connectorStatus?.connectors ?? []).filter((c) => c.connected).map((c) => c.id));
+    const needsConnect = selectedSeoTools.filter((id) => ["gsc", "ga4", "meta", "youtube"].includes(id) && !connected.has(id as ConnectorId));
+
+    const results: string[] = [];
+    if (selectedSeoTools.includes("pagespeed") && scannedUrl) {
+      try {
+        const response = await fetch(`/api/pagespeed?siteUrl=${encodeURIComponent(scannedUrl)}`, { cache: "no-store" });
+        const payload = (await response.json()) as PageSpeedInlineResult;
+        if (response.ok && payload.ok) {
+          setLivePageSpeed(payload);
+          results.push(`PageSpeed ran: score ${payload.summary?.score ?? "N/A"}/100`);
+        } else {
+          results.push("PageSpeed run failed");
+        }
+      } catch {
+        results.push("PageSpeed run failed");
+      }
+    }
+
+    if (selectedSeoTools.includes("crawler")) {
+      results.push("Crawler insights loaded from current scan");
+    }
+    if (selectedSeoTools.includes("schema")) {
+      results.push("Schema checks available in Optimization Detail");
+    }
+
+    const connectHint = needsConnect.length
+      ? `Connect these tools to get live analytics: ${needsConnect.join(", ")}`
+      : "All selected connector tools are linked.";
+
+    setToolActionStatus(`${results.join(" | ")}${results.length ? " | " : ""}${connectHint}`);
+  };
+
+  const testGscAccess = async () => {
+    const target = scanUrl || scannedUrl || sessionUser?.website || "";
+    if (!target) {
+      setGscTestStatus("Enter website URL first.");
+      return;
+    }
+
+    setGscTestStatus("Testing GSC property access...");
+    try {
+      const response = await fetch(`/api/integrations/gsc/test-access?siteUrl=${encodeURIComponent(target)}`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        property?: string;
+        rows?: number;
+        note?: string;
+        message?: string;
+      };
+
+      if (!response.ok || !payload.ok) {
+        setGscTestStatus(`FAIL: ${payload.message ?? "No access to GSC property"}`);
+        return;
+      }
+
+      setGscTestStatus(
+        `PASS: ${payload.property} (${payload.rows ?? 0} rows)${payload.note ? ` - ${payload.note}` : ""}`,
+      );
+    } catch {
+      setGscTestStatus("FAIL: Unable to test GSC access due to network/server error.");
+    }
+  };
+
+  const saveSelectedTools = () => {
+    try {
+      localStorage.setItem("indra:selectedSeoTools", JSON.stringify(selectedSeoTools));
+      setToolActionStatus("Selected tool stack saved for this browser session.");
+    } catch {
+      setToolActionStatus("Unable to save tool stack in this browser.");
+    }
+  };
+
+  const goToPricing = () => {
+    window.location.href = "/pricing";
+  };
+
+  const fetchMonitoringHistory = useCallback(async (siteUrlParam?: string) => {
+    const userId = sessionUser?.email?.trim().toLowerCase() ?? "";
+    const targetUrl = siteUrlParam ?? scannedUrl;
+    if (!userId || !targetUrl || planTier !== "pro") return;
+
+    try {
+      setMonitoringStatus("Refreshing continuous monitoring timeline...");
+      const response = await fetch(
+        `/api/monitoring/history?userId=${encodeURIComponent(userId)}&siteUrl=${encodeURIComponent(targetUrl)}&limit=30`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as { ok?: boolean; points?: MonitoringPoint[]; error?: string };
+      if (!response.ok || !payload.ok || !Array.isArray(payload.points)) {
+        setMonitoringStatus(payload.error ?? "Unable to load monitoring history.");
+        return;
+      }
+      setMonitoringHistory(payload.points);
+      setMonitoringStatus(`Updated ${payload.points.length} monitoring records.`);
+    } catch {
+      setMonitoringStatus("Unable to load monitoring history.");
+    }
+  }, [planTier, scannedUrl, sessionUser?.email]);
+
+  useEffect(() => {
+    try {
+      const rawUser = localStorage.getItem("indra:sessionUser");
+      const rawUrl = localStorage.getItem("indra:lastScannedUrl");
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser) as { name?: string; email?: string; website?: string };
+        if (parsed?.name && parsed?.email && parsed?.website) {
+          setSessionUser({ name: parsed.name, email: parsed.email, website: parsed.website });
+          setLeadSubmitted(true);
+          setSecureEmail(parsed.email);
+          setSecureWebsite(parsed.website);
+        }
+      }
+      if (rawUrl) {
+        setScanUrl(rawUrl);
+      }
+    } catch {
+      // Ignore localStorage parse failures
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("indra:selectedSeoTools");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as string[];
+      if (Array.isArray(parsed) && parsed.length) {
+        setSelectedSeoTools(parsed.filter((id) => SEO_TOOL_OPTIONS.some((tool) => tool.id === id)));
+      }
+    } catch {
+      // Ignore localStorage parse failures
+    }
+  }, []);
+
   useEffect(() => {
     const mounted = { current: true };
     const userId = sessionUser?.email?.trim().toLowerCase() ?? "";
@@ -1349,6 +2020,32 @@ export default function Page() {
       mounted.current = false;
     };
   }, [sessionUser?.email]);
+
+  useEffect(() => {
+    if (planTier !== "pro" || !showDashboard || !scannedUrl) return;
+    void fetchMonitoringHistory(scannedUrl);
+  }, [planTier, showDashboard, scannedUrl, sessionUser?.email, fetchMonitoringHistory]);
+
+  useEffect(() => {
+    if (planTier !== "pro" || !showDashboard || !scannedUrl) return;
+    const userId = sessionUser?.email?.trim().toLowerCase() ?? "";
+    if (!userId) return;
+
+    const id = setInterval(() => {
+      const ts = Date.now();
+      fetch(`/api/site-intel?siteUrl=${encodeURIComponent(scannedUrl)}&userId=${encodeURIComponent(userId)}&ts=${ts}`, { cache: "no-store" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((payload: SiteIntel | null) => {
+          if (payload) setSiteIntel(payload);
+          return fetchMonitoringHistory(scannedUrl);
+        })
+        .catch(() => {
+          setMonitoringStatus("Continuous monitoring refresh failed. Will retry automatically.");
+        });
+    }, 10 * 60 * 1000);
+
+    return () => clearInterval(id);
+  }, [planTier, showDashboard, scannedUrl, sessionUser?.email, fetchMonitoringHistory]);
 
   const sectionPad: React.CSSProperties = { padding: "80px 40px", maxWidth: "1280px", margin: "0 auto" };
 
@@ -1538,6 +2235,21 @@ export default function Page() {
               <span style={{ color: "rgba(255,255,255,0.3)", fontSize: "0.65rem" }}>URL: {scannedUrl}</span>
             </div>
             <div style={{ display: "flex", gap: "16px" }}>
+              <select
+                value={planTier}
+                onChange={(e) => setPlanTier(e.target.value as "free" | "pro")}
+                style={{
+                  background: "#000",
+                  border: "1px solid rgba(0,255,65,0.3)",
+                  color: "#00FF41",
+                  fontSize: "0.62rem",
+                  letterSpacing: "0.06em",
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}
+              >
+                <option value="free">PLAN: FREE</option>
+                <option value="pro">PLAN: PRO</option>
+              </select>
               <span style={{ color: "rgba(0,255,65,0.6)", fontSize: "0.65rem" }}>LEAD: {sessionUser?.name ?? "N/A"}</span>
               <span style={{ color: "rgba(0,255,65,0.6)", fontSize: "0.65rem" }}>MODEL: {(siteIntel?.modelSource ?? "heuristic").toUpperCase()}</span>
               <span style={{ color: "rgba(0,255,65,0.6)", fontSize: "0.65rem" }}>{new Date().toLocaleString()}</span>
@@ -1573,6 +2285,81 @@ export default function Page() {
 
             {/* Main content */}
             <div style={{ flex: 1, padding: "28px 32px" }}>
+              <div style={{ background: "#0a0a0a", border: S.neonBorder, padding: "14px", marginBottom: "16px" }}>
+                <div style={{ color: "#00FF41", fontSize: "0.68rem", letterSpacing: "0.1em", marginBottom: "8px" }}>
+                  SECURE SEO WORKSPACE (OTP + HOST VERIFICATION)
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 120px 120px", gap: "8px", marginBottom: "8px" }}>
+                  <input
+                    value={secureEmail}
+                    onChange={(e) => setSecureEmail(e.target.value)}
+                    placeholder="Account email"
+                    style={{ ...S.inputStyle, fontSize: "0.68rem" }}
+                  />
+                  <input
+                    value={secureWebsite}
+                    onChange={(e) => setSecureWebsite(e.target.value)}
+                    placeholder="Website URL"
+                    style={{ ...S.inputStyle, fontSize: "0.68rem" }}
+                  />
+                  <button onClick={requestSecureOtp} style={{ ...S.btnPrimary, fontSize: "0.62rem", padding: "8px" }}>REQUEST OTP</button>
+                  <input
+                    value={secureOtp}
+                    onChange={(e) => setSecureOtp(e.target.value)}
+                    placeholder="OTP"
+                    style={{ ...S.inputStyle, fontSize: "0.68rem" }}
+                  />
+                </div>
+                <div style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                  <button
+                    onClick={verifySecureOtp}
+                    style={{ ...S.btnPrimary, width: "auto", fontSize: "0.62rem", padding: "8px 12px" }}
+                  >
+                    VERIFY OTP
+                  </button>
+                  <div style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.64rem", alignSelf: "center" }}>
+                    {secureStatus || "Verify once, then AI inputs are allowed only for your verified website."}
+                  </div>
+                </div>
+
+                <div style={{ borderTop: "1px solid rgba(0,255,65,0.14)", paddingTop: "10px" }}>
+                  <div style={{ color: "#00FF41", fontSize: "0.66rem", marginBottom: "6px" }}>
+                    SAFE SEO AI INPUT (NO HACKING / NO EXPLOIT REQUESTS)
+                  </div>
+                  <textarea
+                    value={seoInput}
+                    onChange={(e) => setSeoInput(e.target.value)}
+                    placeholder="Describe your SEO change request. Example: Improve homepage metadata and internal links for treatment pages."
+                    style={{ ...S.inputStyle, minHeight: "84px", resize: "vertical", marginBottom: "8px" }}
+                  />
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "8px" }}>
+                    <button onClick={runSafeSeoAssist} style={{ ...S.btnPrimary, width: "auto", padding: "8px 12px", fontSize: "0.62rem" }}>
+                      RUN SAFE SEO AI
+                    </button>
+                    <span style={{ color: "rgba(255,255,255,0.65)", fontSize: "0.64rem" }}>{seoAssistStatus}</span>
+                  </div>
+
+                  {seoAssistResult && (
+                    <div style={{ border: "1px solid rgba(0,255,65,0.22)", background: "rgba(0,255,65,0.04)", padding: "10px" }}>
+                      <div style={{ color: "#00FF41", fontSize: "0.64rem", marginBottom: "6px" }}>AI SUMMARY</div>
+                      <div style={{ color: "rgba(255,255,255,0.72)", fontSize: "0.66rem", marginBottom: "8px" }}>{seoAssistResult.summary}</div>
+                      <div style={{ color: "rgba(255,255,255,0.8)", fontSize: "0.64rem", marginBottom: "6px" }}>
+                        Missing areas: {seoAssistResult.missingAreas.join(", ") || "None"}
+                      </div>
+                      <div style={{ color: "rgba(0,255,65,0.8)", fontSize: "0.64rem", marginBottom: "4px" }}>Recommendations:</div>
+                      {seoAssistResult.recommendations.slice(0, planTier === "free" ? 2 : 6).map((rec) => (
+                        <div key={rec} style={{ color: "rgba(255,255,255,0.7)", fontSize: "0.64rem", marginBottom: "4px" }}>- {rec}</div>
+                      ))}
+                      {planTier === "free" && seoAssistResult.recommendations.length > 2 && (
+                        <div style={{ color: "#ffaa00", fontSize: "0.63rem", marginTop: "6px" }}>
+                          Upgrade to unlock full AI recommendation list and execution plans.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
                 <div>
                   <div style={{ color: "#00FF41", fontSize: "0.8rem", letterSpacing: "0.12em", fontWeight: 700 }}>
@@ -1603,9 +2390,21 @@ export default function Page() {
                         : [...prev, toolId],
                     );
                   }}
+                  onRunSelectedTools={runSelectedTools}
+                  onSaveSelectedTools={saveSelectedTools}
+                  onTestGscAccess={testGscAccess}
+                  gscTestStatus={gscTestStatus}
+                  toolActionStatus={toolActionStatus}
                   actionStatus={actionStatus}
                   connectorStatus={connectorStatus}
                   pageSpeedInline={pageSpeedInline}
+                  livePageSpeed={livePageSpeed}
+                  monitoringHistory={monitoringHistory}
+                  monitoringStatus={monitoringStatus}
+                  isFreePlan={planTier === "free"}
+                  onUpgradeClick={goToPricing}
+                  onGenerateDisavow={generateDisavowFile}
+                  disavowStatus={disavowStatus}
                 />
               </div>
             </div>

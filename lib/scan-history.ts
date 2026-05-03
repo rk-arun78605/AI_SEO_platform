@@ -69,3 +69,31 @@ export async function saveSnapshot(snapshot: ScanSnapshot): Promise<void> {
     }),
   );
 }
+
+export async function listRecentSnapshots(
+  userId: string,
+  siteUrl: string,
+  limit = 25,
+): Promise<ScanSnapshot[]> {
+  const doc = getDocClient();
+  const result = await doc.send(
+    new QueryCommand({
+      TableName: tableName(),
+      KeyConditionExpression: "pk = :pk",
+      ExpressionAttributeValues: {
+        ":pk": `USER#${userId}#SITE#${siteKey(siteUrl)}`,
+      },
+      ScanIndexForward: false,
+      Limit: Math.max(1, Math.min(limit, 100)),
+    }),
+  );
+
+  return (result.Items ?? []).map((item) => ({
+    userId,
+    siteUrl,
+    kpis: item.kpis,
+    topKeywords: item.topKeywords ?? [],
+    modelSource: item.modelSource ?? "unknown",
+    createdAt: item.createdAt,
+  }));
+}
