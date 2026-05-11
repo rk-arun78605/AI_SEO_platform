@@ -7,9 +7,9 @@
 // When credentials are not configured, returns empty live payload.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessToken, searchAnalytics, SearchRow } from "@/lib/gsc";
-import { runPageSpeed, parseAudit } from "@/lib/pagespeed";
-import type { DashboardPayload } from "@/lib/types";
+import { getAccessToken, searchAnalytics, SearchRow } from "../../../lib/gsc";
+import { runPageSpeed, parseAudit } from "../../../lib/pagespeed";
+import type { DashboardPayload } from "../../../lib/types";
 
 /* ─── Utilities ─────────────────────────────────────────────────── */
 
