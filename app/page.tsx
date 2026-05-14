@@ -1495,6 +1495,23 @@ export default function Page() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Owner test mode — bypass lead form when ?testUrl= is in URL with valid adminSecret
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const testUrl = params.get("testUrl");
+    const adminSecret = params.get("adminSecret");
+    if (testUrl && adminSecret) {
+      // Set a mock owner session so scan proceeds without lead gate
+      setSessionUser({ name: "Owner", email: "owner@indraseo.com", website: testUrl });
+      setLeadSubmitted(true);
+      setScanUrl(testUrl);
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const normalizedHost = (raw: string): string | null => {
     try {
       const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
