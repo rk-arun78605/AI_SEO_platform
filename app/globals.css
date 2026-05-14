@@ -148,3 +148,23 @@ input[type="text"]:focus, input[type="email"]:focus, input[type="tel"]:focus, in
   color: #fff !important;
   font-family: 'JetBrains Mono', monospace !important;
 }
+
+/* ── Design system utilities used by shared components ── */
+.gradient-text {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.card-surface {
+  background: #0d1117;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.bg-surface { background: #0d1117; }
+.bg-surface-2 { background: #161b22; }
+
+.gradient-brand-bg {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
+}

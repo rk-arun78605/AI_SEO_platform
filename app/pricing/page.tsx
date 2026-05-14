@@ -1,9 +1,5 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Check, Zap, ArrowRight, Star } from "lucide-react";
-import { Badge, Card } from "../../components/ui";
-import { cn } from "../../lib/utils";
 import Link from "next/link";
 
 const plans = [
@@ -11,28 +7,26 @@ const plans = [
     name: "Trial",
     price: "$0",
     period: "14 days",
-    desc: "Full platform access for your team to evaluate",
+    desc: "Full platform access — no credit card required",
     badge: null,
-    color: "slate",
+    highlight: false,
     features: [
       "All 7 AI modules",
       "1 website project",
       "Up to 500 keywords",
       "Weekly reports",
       "Community support",
-      "No credit card required",
     ],
     cta: "Start Free Trial",
-    ctaHref: "/dashboard",
-    highlight: false,
+    ctaHref: "/",
   },
   {
     name: "Starter",
     price: "$49",
-    period: "per month",
+    period: "/ month",
     desc: "For solo founders and small blogs",
     badge: null,
-    color: "brand",
+    highlight: false,
     features: [
       "All 7 AI modules",
       "3 website projects",
@@ -43,16 +37,15 @@ const plans = [
       "Email support",
     ],
     cta: "Get Started",
-    ctaHref: "/dashboard",
-    highlight: false,
+    ctaHref: "/",
   },
   {
     name: "Growth",
     price: "$149",
-    period: "per month",
-    desc: "For growing businesses serious about SEO",
+    period: "/ month",
+    desc: "For businesses serious about SEO",
     badge: "Most Popular",
-    color: "brand",
+    highlight: true,
     features: [
       "Everything in Starter",
       "10 website projects",
@@ -66,16 +59,15 @@ const plans = [
       "API access",
     ],
     cta: "Start Growth",
-    ctaHref: "/dashboard",
-    highlight: true,
+    ctaHref: "/",
   },
   {
     name: "Agency",
     price: "$399",
-    period: "per month",
+    period: "/ month",
     desc: "For agencies managing multiple clients",
     badge: null,
-    color: "violet",
+    highlight: false,
     features: [
       "Everything in Growth",
       "Unlimited projects",
@@ -85,190 +77,149 @@ const plans = [
       "Dedicated account manager",
       "SLA guarantee (99.9%)",
       "Custom integrations",
-      "Onboarding & training",
     ],
     cta: "Contact Sales",
-    ctaHref: "/dashboard",
-    highlight: false,
+    ctaHref: "/",
   },
+];
+
+const comparison = [
+  { feature: "AI Modules",          values: ["All 7",   "All 7",   "All 7",      "All 7"]      },
+  { feature: "Projects",             values: ["1",       "3",       "10",          "Unlimited"]  },
+  { feature: "Keywords",             values: ["500",     "2,000",   "Unlimited",   "Unlimited"]  },
+  { feature: "Content Briefs/mo",    values: ["10",      "10",      "50",          "Unlimited"]  },
+  { feature: "Technical Audit",      values: ["Weekly",  "Weekly",  "Daily",       "Real-time"]  },
+  { feature: "Self-Learning Engine", values: ["—",       "—",       "✓",           "✓"]          },
+  { feature: "API Access",           values: ["—",       "—",       "✓",           "✓"]          },
+  { feature: "White-label",          values: ["—",       "—",       "—",           "✓"]          },
+  { feature: "Custom AI Training",   values: ["—",       "—",       "—",           "✓"]          },
 ];
 
 const faqs = [
-  {
-    q: "How does the 14-day trial work?",
-    a: "You get full access to all 7 AI modules, unlimited projects, and all features for 14 days. No credit card required. After the trial, choose a plan or your account pauses — your data is kept for 30 days.",
-  },
-  {
-    q: "Can I change plans at any time?",
-    a: "Yes. Upgrade immediately, downgrade at the end of your billing cycle. No cancellation fees.",
-  },
-  {
-    q: "What counts as a 'keyword'?",
-    a: "Any search term tracked in your rank monitoring dashboard. Keyword research and discovery do not count against your limit.",
-  },
-  {
-    q: "Is my data secure?",
-    a: "All data is encrypted at rest (AES-256) and in transit (TLS 1.3). We are GDPR/CCPA compliant and never share your data with third parties.",
-  },
-  {
-    q: "What integrations are supported?",
-    a: "GA4, Google Search Console, Ahrefs, SEMrush, Moz, WordPress, Shopify, Webflow, HubSpot, and any CMS via our REST API.",
-  },
+  { q: "How does the 14-day trial work?", a: "You get full access to all 7 AI modules for 14 days. No credit card required. After the trial, choose a plan or your account pauses — your data is kept for 30 days." },
+  { q: "Can I change plans at any time?",  a: "Yes. Upgrade immediately, downgrade at the end of your billing cycle. No cancellation fees." },
+  { q: "What counts as a 'keyword'?",      a: "Any search term tracked in your rank monitoring dashboard. Keyword research and discovery do not count against your limit." },
+  { q: "Is my data secure?",              a: "All data is encrypted at rest (AES-256) and in transit (TLS 1.3). GDPR/CCPA compliant. We never share your data with third parties." },
+  { q: "What integrations are supported?", a: "GA4, Google Search Console, Ahrefs, SEMrush, Moz, WordPress, Shopify, Webflow, HubSpot, and any CMS via our REST API." },
 ];
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 24 },
-  visible: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.45, delay: i * 0.08 } }),
-};
 
 export default function PricingPage() {
   return (
-    <div className="min-h-screen pt-24 pb-24 px-4">
+    <div style={{ minHeight: "100vh", background: "#060d1a", color: "#e2e8f0", fontFamily: "Inter, Segoe UI, sans-serif", paddingTop: 80 }}>
+
       {/* Header */}
-      <div className="max-w-3xl mx-auto text-center mb-16">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-          <Badge variant="brand" className="mb-4">
-            <Zap className="w-3.5 h-3.5" /> Simple Pricing
-          </Badge>
-        </motion.div>
-        <motion.h1
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="text-5xl font-bold mb-4"
-        >
-          Invest in Growth,
-          <br />
-          <span className="gradient-text">Not SEO Agencies</span>
-        </motion.h1>
-        <motion.p
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="text-slate-400 text-lg"
-        >
-          Replace a $15k/month SEO agency with AI that works 24/7. Start free, no credit card required.
-        </motion.p>
+      <div style={{ maxWidth: 700, margin: "0 auto", textAlign: "center", padding: "48px 24px 56px" }}>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#6366f115", border: "1px solid #6366f130", borderRadius: 20, padding: "4px 14px", fontSize: 12, fontWeight: 700, color: "#818cf8", marginBottom: 20, textTransform: "uppercase", letterSpacing: 1 }}>
+          ⚡ Simple Pricing
+        </div>
+        <h1 style={{ fontSize: "clamp(2rem,5vw,3.2rem)", fontWeight: 900, lineHeight: 1.15, marginBottom: 16 }}>
+          Invest in Growth,{" "}
+          <span style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6,#06b6d4)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Not SEO Agencies
+          </span>
+        </h1>
+        <p style={{ color: "#94a3b8", fontSize: "1.05rem", lineHeight: 1.7 }}>
+          Replace a $15k/month SEO agency with AI that works 24/7.
+          Start free — no credit card required.
+        </p>
       </div>
 
-      {/* Plans */}
-      <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-20">
-        {plans.map((plan, i) => (
-          <motion.div
-            key={plan.name}
-            custom={i}
-            initial="hidden"
-            animate="visible"
-            variants={fadeUp}
-            className="relative"
-          >
+      {/* Plans grid */}
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 24px 72px", display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 20 }}>
+        {plans.map((plan) => (
+          <div key={plan.name} style={{ position: "relative" }}>
             {plan.badge && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-gradient-brand text-white shadow-lg shadow-brand/30">
-                  <Star className="w-3 h-3" fill="currentColor" />
-                  {plan.badge}
-                </span>
+              <div style={{ position: "absolute", top: -14, left: "50%", transform: "translateX(-50%)", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", borderRadius: 20, padding: "4px 14px", fontSize: 11, fontWeight: 800, whiteSpace: "nowrap", zIndex: 2, boxShadow: "0 4px 16px #6366f140" }}>
+                ★ {plan.badge}
               </div>
             )}
-            <div
-              className={cn(
-                "h-full rounded-2xl p-6 flex flex-col border transition-all duration-300",
-                plan.highlight
-                  ? "bg-gradient-to-b from-brand/10 to-violet-900/10 border-brand/40 shadow-2xl shadow-brand/20"
-                  : "bg-surface border-white/6 hover:border-white/12"
-              )}
-            >
-              <div className="mb-6">
-                <p className="text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2">
+            <div style={{
+              height: "100%",
+              background: plan.highlight ? "linear-gradient(160deg,#0f1729,#1a1040)" : "#0a1628",
+              border: plan.highlight ? "1px solid #6366f160" : "1px solid #1e3a5f",
+              borderRadius: 16,
+              padding: "28px 24px",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: plan.highlight ? "0 0 40px #6366f120" : "none",
+              transition: "border-color 0.2s",
+            }}>
+              {/* Plan header */}
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, color: plan.highlight ? "#818cf8" : "#64748b", marginBottom: 8 }}>
                   {plan.name}
-                </p>
-                <div className="flex items-end gap-1 mb-1">
-                  <span className="text-4xl font-bold text-slate-100">{plan.price}</span>
-                  <span className="text-slate-500 text-sm pb-1">/{plan.period}</span>
                 </div>
-                <p className="text-slate-400 text-sm">{plan.desc}</p>
+                <div style={{ display: "flex", alignItems: "flex-end", gap: 4, marginBottom: 6 }}>
+                  <span style={{ fontSize: 38, fontWeight: 900, color: "#f1f5f9", lineHeight: 1 }}>{plan.price}</span>
+                  <span style={{ fontSize: 13, color: "#64748b", paddingBottom: 4 }}>{plan.period}</span>
+                </div>
+                <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.5 }}>{plan.desc}</p>
               </div>
 
-              <ul className="flex-1 space-y-3 mb-8">
-                {plan.features.map((feat) => (
-                  <li key={feat} className="flex items-start gap-2.5 text-sm text-slate-300">
-                    <Check className="w-4 h-4 text-accent shrink-0 mt-0.5" />
-                    {feat}
+              {/* Features */}
+              <ul style={{ flex: 1, listStyle: "none", padding: 0, margin: "0 0 28px", display: "flex", flexDirection: "column", gap: 10 }}>
+                {plan.features.map((f) => (
+                  <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 10, fontSize: 13, color: "#cbd5e1", lineHeight: 1.4 }}>
+                    <span style={{ color: plan.highlight ? "#818cf8" : "#34d399", fontSize: 15, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>✓</span>
+                    {f}
                   </li>
                 ))}
               </ul>
 
-              <Link
-                href={plan.ctaHref}
-                className={cn(
-                  "flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-semibold text-sm transition-all",
-                  plan.highlight
-                    ? "bg-gradient-brand text-white shadow-lg shadow-brand/30 hover:opacity-90"
-                    : "border border-white/10 text-slate-300 hover:border-brand/40 hover:bg-brand/5"
-                )}
-              >
-                {plan.cta}
-                <ArrowRight className="w-4 h-4" />
+              {/* CTA */}
+              <Link href={plan.ctaHref} style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 700,
+                textDecoration: "none", transition: "opacity 0.2s",
+                ...(plan.highlight
+                  ? { background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", boxShadow: "0 4px 20px #6366f140" }
+                  : { background: "transparent", border: "1px solid #1e3a5f", color: "#94a3b8" }
+                ),
+              }}>
+                {plan.cta} →
               </Link>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 
-      {/* Feature Comparison */}
-      <div className="max-w-4xl mx-auto mb-24">
-        <h2 className="text-2xl font-bold text-center mb-10">What&apos;s Included</h2>
-        <Card>
-          <div className="grid grid-cols-5 gap-4 text-xs text-slate-500 uppercase tracking-wider font-semibold mb-4 pb-4 border-b border-white/5">
-            <span className="col-span-2">Feature</span>
+      {/* Feature comparison */}
+      <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 24px 72px" }}>
+        <h2 style={{ textAlign: "center", fontSize: "1.5rem", fontWeight: 800, marginBottom: 32, color: "#f1f5f9" }}>What&apos;s Included</h2>
+        <div style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 16, overflow: "hidden" }}>
+          {/* Header row */}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "14px 20px", background: "#060d1a", borderBottom: "1px solid #1e3a5f" }}>
+            <span style={{ fontSize: 11, color: "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Feature</span>
             {plans.map((p) => (
-              <span key={p.name} className="text-center">{p.name}</span>
+              <span key={p.name} style={{ fontSize: 11, color: p.highlight ? "#818cf8" : "#475569", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1, textAlign: "center" }}>{p.name}</span>
             ))}
           </div>
-          {[
-            { feature: "AI Modules", values: ["All 7", "All 7", "All 7", "All 7"] },
-            { feature: "Projects", values: ["1", "3", "10", "Unlimited"] },
-            { feature: "Keywords", values: ["500", "2,000", "Unlimited", "Unlimited"] },
-            { feature: "Content Briefs/mo", values: ["10", "10", "50", "Unlimited"] },
-            { feature: "Technical Audit", values: ["Weekly", "Weekly", "Daily", "Real-time"] },
-            { feature: "Self-Learning Engine", values: ["—", "—", "✓", "✓"] },
-            { feature: "API Access", values: ["—", "—", "✓", "✓"] },
-            { feature: "White-label", values: ["—", "—", "—", "✓"] },
-            { feature: "Custom AI Training", values: ["—", "—", "—", "✓"] },
-          ].map((row) => (
-            <div key={row.feature} className="grid grid-cols-5 gap-4 py-3 border-b border-white/5 last:border-0">
-              <span className="col-span-2 text-sm text-slate-300">{row.feature}</span>
+          {comparison.map((row, ri) => (
+            <div key={row.feature} style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", padding: "12px 20px", borderBottom: ri < comparison.length - 1 ? "1px solid #0d1f3c" : "none", alignItems: "center" }}>
+              <span style={{ fontSize: 13, color: "#94a3b8" }}>{row.feature}</span>
               {row.values.map((val, j) => (
-                <span key={j} className={cn("text-center text-sm", val === "—" ? "text-slate-600" : plans[j].highlight ? "text-brand font-semibold" : "text-slate-300")}>
+                <span key={j} style={{ fontSize: 13, textAlign: "center", color: val === "—" ? "#334155" : plans[j].highlight ? "#818cf8" : "#cbd5e1", fontWeight: plans[j].highlight && val !== "—" ? 700 : 400 }}>
                   {val}
                 </span>
               ))}
             </div>
           ))}
-        </Card>
+        </div>
       </div>
 
       {/* FAQs */}
-      <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-center mb-10">Frequently Asked</h2>
-        <div className="space-y-4">
-          {faqs.map((faq, i) => (
-            <motion.div
-              key={faq.q}
-              custom={i}
-              initial="hidden"
-              whileInView="visible"
-              viewport={{ once: true }}
-              variants={fadeUp}
-            >
-              <Card>
-                <h3 className="font-semibold text-slate-100 mb-2">{faq.q}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{faq.a}</p>
-              </Card>
-            </motion.div>
+      <div style={{ maxWidth: 680, margin: "0 auto", padding: "0 24px 80px" }}>
+        <h2 style={{ textAlign: "center", fontSize: "1.5rem", fontWeight: 800, marginBottom: 32, color: "#f1f5f9" }}>Frequently Asked</h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {faqs.map((faq) => (
+            <div key={faq.q} style={{ background: "#0a1628", border: "1px solid #1e3a5f", borderRadius: 12, padding: "20px 24px" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9", marginBottom: 8 }}>{faq.q}</h3>
+              <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7 }}>{faq.a}</p>
+            </div>
           ))}
         </div>
       </div>
+
     </div>
   );
 }
