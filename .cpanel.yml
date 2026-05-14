@@ -2,6 +2,6 @@
 deployment:
   tasks:
     - export DEPLOYPATH=/home/indrxkhf/ai-seo-platform
-    - cd $DEPLOYPATH
-    - npm ci --production=false
-    - npm run build
+    - rm -rf $DEPLOYPATH/.next $DEPLOYPATH/tsconfig.tsbuildinfo
+    - npm ci --production=false --prefix $DEPLOYPATH
+    - npm run build --prefix $DEPLOYPATH
