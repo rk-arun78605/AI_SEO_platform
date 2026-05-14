@@ -1560,7 +1560,7 @@ export default function Page() {
 
       setScanProgress(25);
       const ts = Date.now();
-      const [dashboardRes, intelRes, pageSpeedRes] = await Promise.all([
+      const [dashboardRes, intelRes, pageSpeedRes] = await Promise.allSettled([
         fetch(`/api/dashboard?siteUrl=${encodeURIComponent(normalized)}&userId=${encodeURIComponent(userId)}&ts=${ts}`, { cache: "no-store" }),
         fetch(`/api/site-intel?siteUrl=${encodeURIComponent(normalized)}&userId=${encodeURIComponent(userId)}&ts=${ts}`, { cache: "no-store" }),
         fetch(`/api/pagespeed?siteUrl=${encodeURIComponent(normalized)}&ts=${ts}`, { cache: "no-store" }),
@@ -1568,13 +1568,52 @@ export default function Page() {
 
       setScanProgress(70);
 
-      if (!dashboardRes.ok) {
-        throw new Error(`Dashboard API failed with status ${dashboardRes.status}`);
+      // Parse dashboard — use empty shell if the API is down so other panels still render
+      let dashboardPayload: DashboardPayload | null = null;
+      if (dashboardRes.status === "fulfilled" && dashboardRes.value.ok) {
+        try { dashboardPayload = (await dashboardRes.value.json()) as DashboardPayload; } catch { /* ignore */ }
+      }
+      if (!dashboardPayload) {
+        const httpStatus = dashboardRes.status === "fulfilled" ? dashboardRes.value.status : 0;
+        console.warn(`[scan] dashboard API unavailable (HTTP ${httpStatus}) — rendering without GSC data`);
+        dashboardPayload = {
+          isDemo: false, siteUrl: normalized,
+          lastUpdated: new Date().toISOString(),
+          dataStatus: "error",
+          dataMessage: `Analytics service returned HTTP ${httpStatus}. The site analysis below uses direct page inspection.`,
+          kpis: [
+            { label: "Organic Traffic", value: "—", change: "0%", up: false },
+            { label: "Keywords Top 10", value: "—", change: "0%", up: false },
+            { label: "Avg. Position",   value: "—", change: "0 pts", up: false },
+            { label: "Click-Through Rate", value: "—", change: "0%", up: false },
+          ],
+          trafficData: [], rankingData: [], keywordsData: [],
+          auditData: [
+            { name: "Passed",   value: 0, color: "#10b981" },
+            { name: "Warnings", value: 0, color: "#f59e0b" },
+            { name: "Failed",   value: 0, color: "#ef4444" },
+          ],
+          contentItems: [], yoyChange: "—",
+        };
       }
 
-      const dashboardPayload = (await dashboardRes.json()) as DashboardPayload;
-      const intelPayload = intelRes.ok ? ((await intelRes.json()) as SiteIntel) : null;
-      const pageSpeedPayload = pageSpeedRes.ok ? ((await pageSpeedRes.json()) as PageSpeedInlineResult) : null;
+      const intelPayload =
+        intelRes.status === "fulfilled" && intelRes.value.ok
+          ? await intelRes.value.json().catch(() => null) as SiteIntel | null
+          : null;
+      const pageSpeedPayload =
+        pageSpeedRes.status === "fulfilled" && pageSpeedRes.value.ok
+          ? await pageSpeedRes.value.json().catch(() => null) as PageSpeedInlineResult | null
+          : null;
+
+      // If ALL three APIs failed with network errors (not just non-ok), abort
+      const allNetworkFailed =
+        dashboardRes.status === "rejected" &&
+        intelRes.status === "rejected" &&
+        pageSpeedRes.status === "rejected";
+      if (allNetworkFailed) {
+        throw new Error("All APIs unreachable — check that the app server is running.");
+      }
 
       setScanData(dashboardPayload);
       setSiteIntel(intelPayload);
@@ -1592,8 +1631,9 @@ export default function Page() {
       setScanProgress(100);
       setShowDashboard(true);
       setTimeout(() => dashRef.current?.scrollIntoView({ behavior: "smooth" }), 200);
-    } catch {
-      setScanError("Scan failed. Please verify the URL and try again.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setScanError(`Scan failed: ${msg}`);
     } finally {
       setIsScanning(false);
     }
