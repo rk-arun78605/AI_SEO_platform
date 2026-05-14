@@ -1473,6 +1473,28 @@ export default function Page() {
   const scanRef = useRef<HTMLDivElement>(null);
   const dashRef = useRef<HTMLDivElement>(null);
 
+  // Restore scan session after back-navigation from pricing/other pages
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("indra:scanSession");
+      if (saved) {
+        const s = JSON.parse(saved);
+        if (s.scanData && s.scannedUrl) {
+          setScanData(s.scanData);
+          setSiteIntel(s.siteIntel ?? null);
+          setLivePageSpeed(s.livePageSpeed ?? null);
+          setRankPrediction(s.rankPrediction ?? null);
+          setContentStudio(s.contentStudio ?? null);
+          setSelfLearning(s.selfLearning ?? null);
+          setScannedUrl(s.scannedUrl);
+          setScanUrl(s.scannedUrl);
+          setShowDashboard(true);
+        }
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const normalizedHost = (raw: string): string | null => {
     try {
       const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
@@ -1683,8 +1705,18 @@ export default function Page() {
       setScannedUrl(normalized);
       try {
         localStorage.setItem("indra:lastScannedUrl", normalized);
+        // Persist scan results so back-navigation doesn't reset the dashboard
+        sessionStorage.setItem("indra:scanSession", JSON.stringify({
+          scannedUrl:     normalized,
+          scanData:       dashboardPayload,
+          siteIntel:      intelPayload,
+          livePageSpeed:  pageSpeedPayload?.ok ? pageSpeedPayload : null,
+          rankPrediction: rankPayload?.ok ? rankPayload.data : null,
+          contentStudio:  contentPayload?.ok ? contentPayload.data : null,
+          selfLearning:   learnPayload?.ok ? learnPayload.data : null,
+        }));
       } catch {
-        // Ignore localStorage errors
+        // Ignore storage errors
       }
       setScanProgress(100);
       setShowDashboard(true);
@@ -2788,6 +2820,172 @@ export default function Page() {
         button:hover { opacity: 0.85; }
         input:focus { border-color: #00FF41 !important; box-shadow: 0 0 8px rgba(0,255,65,0.3) !important; }
       `}</style>
+
+      {/* ── INDRA AI CHAT WIDGET ────────────────────────────────────────────── */}
+      <IndraChatWidget
+        context={siteIntel ? {
+          siteUrl:      scannedUrl,
+          primaryTopic: siteIntel.primaryTopic,
+          topKeywords:  siteIntel.topKeywords,
+          kpis:         siteIntel.kpis,
+          issues:       siteIntel.issues,
+          summary:      siteIntel.summary,
+        } : null}
+      />
     </div>
+  );
+}
+
+/* ── INDRA CHAT WIDGET COMPONENT ─────────────────────────────────────────────── */
+function IndraChatWidget({ context }: { context: Record<string,unknown> | null }) {
+  const [open, setOpen]       = React.useState(false);
+  const [input, setInput]     = React.useState("");
+  const [sending, setSending] = React.useState(false);
+  const [msgs, setMsgs]       = React.useState<Array<{role:"user"|"assistant"; content:string}>>([
+    { role: "assistant", content: "INDRA ONLINE. I've analysed your site data. Ask me anything — ranking drops, quick wins, what your scores mean, or what to fix first." },
+  ]);
+  const bottomRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    if (open) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [msgs, open]);
+
+  const send = async () => {
+    const msg = input.trim();
+    if (!msg || sending) return;
+    setInput("");
+    const newMsgs: Array<{role:"user"|"assistant"; content:string}> = [...msgs, { role: "user", content: msg }];
+    setMsgs(newMsgs);
+    setSending(true);
+    try {
+      const res = await fetch("/api/indra-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: msg, context: context ?? {}, history: newMsgs.slice(-10) }),
+      });
+      const data = await res.json() as { ok: boolean; reply?: string; error?: string };
+      setMsgs(m => [...m, { role: "assistant", content: data.ok ? (data.reply ?? "") : `⚠ ${data.error}` }]);
+    } catch {
+      setMsgs(m => [...m, { role: "assistant", content: "⚠ Connection error. Check your network." }]);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const NEON = "#00FF41";
+  const mono = "'JetBrains Mono','Courier New',monospace";
+
+  return (
+    <>
+      {/* Floating button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          position: "fixed", bottom: 28, right: 28, zIndex: 999,
+          width: 56, height: 56, borderRadius: "50%",
+          background: open ? "#000" : NEON,
+          border: `2px solid ${NEON}`,
+          boxShadow: `0 0 20px rgba(0,255,65,${open ? 0.3 : 0.6})`,
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.2s", fontSize: open ? "1.2rem" : "1.4rem",
+          color: open ? NEON : "#000", fontWeight: 900,
+        }}
+        title={open ? "Close INDRA" : "Ask INDRA AI"}
+      >
+        {open ? "✕" : "⬡"}
+      </button>
+
+      {/* Chat panel */}
+      {open && (
+        <div style={{
+          position: "fixed", bottom: 96, right: 28, zIndex: 998,
+          width: 360, height: 500, background: "#000",
+          border: `1px solid rgba(0,255,65,0.4)`,
+          boxShadow: "0 0 40px rgba(0,255,65,0.15)",
+          display: "flex", flexDirection: "column",
+          fontFamily: mono,
+        }}>
+          {/* Header */}
+          <div style={{ background: "#0a0a0a", borderBottom: "1px solid rgba(0,255,65,0.25)", padding: "10px 16px", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: NEON, boxShadow: `0 0 8px ${NEON}` }} />
+            <span style={{ color: NEON, fontSize: "0.7rem", fontWeight: 900, letterSpacing: "0.2em" }}>INDRA AI ANALYST</span>
+            {context && <span style={{ marginLeft: "auto", fontSize: "0.55rem", color: "rgba(0,255,65,0.4)", letterSpacing: "0.1em" }}>SITE DATA LOADED</span>}
+          </div>
+
+          {/* Messages */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+            {msgs.map((m, i) => (
+              <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
+                <div style={{ fontSize: "0.55rem", letterSpacing: "0.15em", color: "rgba(255,255,255,0.25)", marginBottom: 4 }}>
+                  {m.role === "user" ? "YOU" : "INDRA"}
+                </div>
+                <div style={{
+                  maxWidth: "88%", padding: "8px 12px",
+                  background: m.role === "user" ? "rgba(0,255,65,0.1)" : "#0a0a0a",
+                  border: m.role === "user" ? "1px solid rgba(0,255,65,0.3)" : "1px solid rgba(255,255,255,0.07)",
+                  fontSize: "0.72rem", color: m.role === "user" ? NEON : "rgba(255,255,255,0.8)",
+                  lineHeight: 1.6, letterSpacing: "0.02em",
+                }}>
+                  {m.content}
+                </div>
+              </div>
+            ))}
+            {sending && (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+                <div style={{ fontSize: "0.55rem", letterSpacing: "0.15em", color: "rgba(255,255,255,0.25)", marginBottom: 4 }}>INDRA</div>
+                <div style={{ padding: "8px 12px", background: "#0a0a0a", border: "1px solid rgba(255,255,255,0.07)", fontSize: "0.72rem", color: NEON }}>
+                  PROCESSING<span style={{ animation: "blink 1s step-end infinite" }}>_</span>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
+
+          {/* Suggested questions (only if no user message yet) */}
+          {msgs.length === 1 && (
+            <div style={{ padding: "0 12px 8px", display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {[
+                "Why is my score low?",
+                "What's my biggest issue?",
+                "How do I get more traffic?",
+                "What should I fix first?",
+              ].map(q => (
+                <button key={q} onClick={() => { setInput(q); }} style={{ background: "none", border: "1px solid rgba(0,255,65,0.2)", color: "rgba(0,255,65,0.6)", fontSize: "0.6rem", letterSpacing: "0.08em", padding: "4px 8px", cursor: "pointer", fontFamily: mono }}>
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Input */}
+          <div style={{ borderTop: "1px solid rgba(0,255,65,0.2)", display: "flex" }}>
+            <input
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
+              placeholder="ASK INDRA..."
+              style={{
+                flex: 1, background: "#000", border: "none", outline: "none",
+                padding: "12px 14px", color: "#fff", fontSize: "0.72rem",
+                fontFamily: mono, letterSpacing: "0.05em",
+              }}
+            />
+            <button
+              onClick={send}
+              disabled={sending || !input.trim()}
+              style={{
+                background: input.trim() ? NEON : "transparent",
+                border: "none", color: input.trim() ? "#000" : "rgba(0,255,65,0.3)",
+                padding: "12px 16px", cursor: "pointer", fontSize: "0.9rem",
+                fontWeight: 900, transition: "all 0.15s",
+                fontFamily: mono,
+              }}
+            >
+              ▶
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
