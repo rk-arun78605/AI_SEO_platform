@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getConnector } from "@/lib/integration-store";
+import { getConnector } from "../../../../lib/integration-store";
 
 export const runtime = "nodejs";
 

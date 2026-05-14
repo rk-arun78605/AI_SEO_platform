@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/otp-session";
-import { generateMLInsights } from "@/lib/aws-model-insights";
+import { verifySessionToken } from "../../../../lib/otp-session";
+import { generateMLInsights } from "../../../../lib/aws-model-insights";
 
 export const runtime = "nodejs";
 

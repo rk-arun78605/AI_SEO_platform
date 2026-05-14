@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAccessToken, submitSitemap } from "@/lib/gsc";
+import { getAccessToken, submitSitemap } from "../../../../lib/gsc";
 
 export const runtime = "nodejs";
 

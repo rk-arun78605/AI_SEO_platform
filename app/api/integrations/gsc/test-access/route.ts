@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAccessToken, searchAnalytics } from "@/lib/gsc";
+import { getAccessToken, searchAnalytics } from "../../../../../lib/gsc";
 
 export const runtime = "nodejs";
 

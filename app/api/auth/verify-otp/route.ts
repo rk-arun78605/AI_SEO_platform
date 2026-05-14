@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { verifyOtp } from "@/lib/otp-store";
-import { createSessionToken } from "@/lib/otp-session";
+import { verifyOtp } from "../../../../lib/otp-store";
+import { createSessionToken } from "../../../../lib/otp-session";
 
 export const runtime = "nodejs";
 

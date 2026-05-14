@@ -2,8 +2,8 @@
 
 import { motion } from "framer-motion";
 import { Check, Zap, ArrowRight, Star } from "lucide-react";
-import { Badge, Card } from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { Badge, Card } from "../../components/ui";
+import { cn } from "../../lib/utils";
 import Link from "next/link";
 
 const plans = [

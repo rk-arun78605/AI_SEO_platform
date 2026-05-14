@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createOtp } from "@/lib/otp-store";
+import { createOtp } from "../../../../lib/otp-store";
 
 export const runtime = "nodejs";
 

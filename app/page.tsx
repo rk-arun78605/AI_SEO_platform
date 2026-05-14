@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import React, { useCallback, useEffect, useState, useRef } from "react";
-import type { DashboardPayload } from "@/lib/types";
+import type { DashboardPayload } from "../lib/types";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Lead { name: string; email: string; phone: string; website: string; }

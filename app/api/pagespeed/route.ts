@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseAudit, runPageSpeed } from "@/lib/pagespeed";
+import { parseAudit, runPageSpeed } from "../../../lib/pagespeed";
 
 export const runtime = "nodejs";
 

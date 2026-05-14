@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { parseAudit, runPageSpeed } from "@/lib/pagespeed";
-import { generateMLInsights } from "@/lib/aws-model-insights";
-import { getAccessToken, searchAnalytics } from "@/lib/gsc";
-import { getLatestSnapshot, saveSnapshot } from "@/lib/scan-history";
+import { parseAudit, runPageSpeed } from "../../../lib/pagespeed";
+import { generateMLInsights } from "../../../lib/aws-model-insights";
+import { getAccessToken, searchAnalytics } from "../../../lib/gsc";
+import { getLatestSnapshot, saveSnapshot } from "../../../lib/scan-history";
 
 export const runtime = "nodejs";
 

@@ -5,7 +5,7 @@ import {
   Brain, Search, FileText, Shield, TrendingUp, BarChart3, RefreshCw,
   CheckCircle, Zap, Database, Cpu, Globe,
 } from "lucide-react";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card } from "../../components/ui";
 
 const modules = [
   {

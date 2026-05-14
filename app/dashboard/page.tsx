@@ -10,9 +10,9 @@ import {
   TrendingUp, Search, FileText, Shield, Zap,
   ArrowUpRight, ArrowDownRight, Eye, MousePointerClick, Target,
 } from "lucide-react";
-import { Badge, Card } from "@/components/ui";
-import { cn } from "@/lib/utils";
-import type { DashboardPayload } from "@/lib/types";
+import { Badge, Card } from "../../components/ui";
+import { cn } from "../../lib/utils";
+import type { DashboardPayload } from "../../lib/types";
 
 /* ─── KPI icon order must match /api/dashboard response order ─── */
 const KPI_ICONS = [Eye, Target, TrendingUp, MousePointerClick] as const;

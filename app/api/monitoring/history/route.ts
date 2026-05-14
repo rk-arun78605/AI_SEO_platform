@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listRecentSnapshots } from "@/lib/scan-history";
+import { listRecentSnapshots } from "../../../../lib/scan-history";
 
 export const runtime = "nodejs";
 
