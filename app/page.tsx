@@ -1460,6 +1460,13 @@ export default function Page() {
   const [disavowStatus, setDisavowStatus] = useState("");
   const [livePageSpeed, setLivePageSpeed] = useState<PageSpeedInlineResult | null>(null);
   const [toolActionStatus, setToolActionStatus] = useState("");
+  // Pillars 12/13/14
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [rankPrediction, setRankPrediction] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [contentStudio, setContentStudio] = useState<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [selfLearning, setSelfLearning] = useState<any>(null);
   const [gscTestStatus, setGscTestStatus] = useState("");
   const [monitoringHistory, setMonitoringHistory] = useState<MonitoringPoint[]>([]);
   const [monitoringStatus, setMonitoringStatus] = useState("");
@@ -1566,7 +1573,7 @@ export default function Page() {
         fetch(`/api/pagespeed?siteUrl=${encodeURIComponent(normalized)}&ts=${ts}`, { cache: "no-store" }),
       ]);
 
-      setScanProgress(70);
+      setScanProgress(60);
 
       // Parse dashboard — use empty shell if the API is down so other panels still render
       let dashboardPayload: DashboardPayload | null = null;
@@ -1615,9 +1622,60 @@ export default function Page() {
         throw new Error("All APIs unreachable — check that the app server is running.");
       }
 
+      setScanProgress(70);
+
+      // ── Pillars 12/13/14: rank prediction, content studio, self-learning ──
+      // Fire after initial parse so we always have some data even if these fail
+      const kpis = intelPayload?.kpis ?? { technical:50, seo:50, functional:50, user:50, overall:50 };
+      const psiScore = (pageSpeedPayload as unknown as Record<string,unknown>)?.score as number ?? 50;
+
+      const [rankRes, contentRes, learnRes] = await Promise.allSettled([
+        fetch("/api/rank-prediction", {
+          method: "POST", cache: "no-store",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({
+            siteUrl: normalized,
+            technicalScore:  kpis.technical,
+            seoScore:        kpis.seo,
+            functionalScore: kpis.functional,
+            userScore:       kpis.user,
+            pagespeedScore:  psiScore,
+            keywordCoverage: (intelPayload as unknown as Record<string,unknown>)?.keywordCoverage as number ?? 0,
+            issueCount:      (intelPayload?.issues?.length ?? 0),
+          }),
+        }),
+        fetch("/api/content-studio", {
+          method: "POST", cache: "no-store",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({
+            siteUrl:      normalized,
+            title:        intelPayload?.title        ?? "",
+            description:  intelPayload?.description  ?? "",
+            h1:           (intelPayload as unknown as Record<string,unknown>)?.h1 as string ?? "",
+            topKeywords:  intelPayload?.topKeywords  ?? [],
+            primaryTopic: intelPayload?.primaryTopic ?? "General Business",
+          }),
+        }),
+        fetch(`/api/self-learning?userId=${encodeURIComponent(userId)}&siteUrl=${encodeURIComponent(normalized)}`, { cache:"no-store" }),
+      ]);
+
+      setScanProgress(90);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const safeJson = async (r: PromiseSettledResult<Response>): Promise<any> => {
+        if (r.status !== "fulfilled" || !r.value.ok) return null;
+        return r.value.json().catch(() => null);
+      };
+      const rankPayload    = await safeJson(rankRes);
+      const contentPayload = await safeJson(contentRes);
+      const learnPayload   = await safeJson(learnRes);
+
       setScanData(dashboardPayload);
       setSiteIntel(intelPayload);
       setLivePageSpeed(pageSpeedPayload?.ok ? pageSpeedPayload : null);
+      setRankPrediction(rankPayload?.ok ? rankPayload.data : null);
+      setContentStudio(contentPayload?.ok ? contentPayload.data : null);
+      setSelfLearning(learnPayload?.ok ? learnPayload.data : null);
       setActionStatus({});
       setPageSpeedInline({});
       setToolActionStatus("");
@@ -2449,6 +2507,173 @@ export default function Page() {
               </div>
             </div>
           </div>
+
+          {/* ── Pillars 12/13/14 — Rank Prediction, Content Studio, Self-Learning ── */}
+          {(rankPrediction || contentStudio || selfLearning) && (
+            <div style={{ maxWidth:1200, margin:"0 auto", padding:"0 24px 60px", display:"flex", flexDirection:"column", gap:32 }}>
+
+              {/* Rank Prediction Engine */}
+              {rankPrediction && (
+                <div style={{ background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:16, padding:28 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+                    <span style={{ fontSize:20 }}>📈</span>
+                    <h2 style={{ color:"#f1f5f9", fontSize:"1.1rem", fontWeight:700, margin:0 }}>Rank Prediction Engine</h2>
+                    <span style={{ marginLeft:"auto", background: rankPrediction.trajectory==="improving"?"#22c55e22":"#ef444422", color: rankPrediction.trajectory==="improving"?"#22c55e":"#ef4444", border:`1px solid ${rankPrediction.trajectory==="improving"?"#22c55e":"#ef4444"}40`, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                      {rankPrediction.trajectory?.toUpperCase()}
+                    </span>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:24 }}>
+                    {[
+                      { label:"Predicted Position", value:`#${rankPrediction.predicted_position_range?.[0]}–${rankPrediction.predicted_position_range?.[1]}`, color:"#38bdf8" },
+                      { label:"Composite Score",    value:`${rankPrediction.score}/100`,                                                                           color:"#a78bfa" },
+                      { label:"Confidence",         value:rankPrediction.confidence?.toUpperCase(),                                                                color:"#34d399" },
+                    ].map((kpi) => (
+                      <div key={kpi.label} style={{ background:"#060d1a", border:"1px solid #1e3a5f", borderRadius:10, padding:"14px 16px", textAlign:"center" }}>
+                        <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:6 }}>{kpi.label}</div>
+                        <div style={{ fontSize:20, fontWeight:800, color:kpi.color }}>{kpi.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Key Ranking Factors</div>
+                      {rankPrediction.key_factors?.map((f: {name:string; score:number; impact:string; weight:number}) => (
+                        <div key={f.name} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                          <span style={{ fontSize:10, color: f.impact==="positive"?"#22c55e":f.impact==="negative"?"#ef4444":"#f59e0b", minWidth:14 }}>
+                            {f.impact==="positive"?"▲":f.impact==="negative"?"▼":"●"}
+                          </span>
+                          <span style={{ color:"#94a3b8", fontSize:12, flex:1 }}>{f.name}</span>
+                          <span style={{ color:"#e2e8f0", fontSize:12, fontWeight:700, minWidth:32, textAlign:"right" }}>{f.score}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Top Recommendations</div>
+                      {rankPrediction.recommendations?.slice(0,4).map((r: string, i: number) => (
+                        <div key={i} style={{ display:"flex", gap:8, marginBottom:8 }}>
+                          <span style={{ color:"#38bdf8", fontSize:11, minWidth:16, paddingTop:1 }}>→</span>
+                          <span style={{ color:"#94a3b8", fontSize:12 }}>{r}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Content AI Studio */}
+              {contentStudio && (
+                <div style={{ background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:16, padding:28 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+                    <span style={{ fontSize:20 }}>✍️</span>
+                    <h2 style={{ color:"#f1f5f9", fontSize:"1.1rem", fontWeight:700, margin:0 }}>Content AI Studio</h2>
+                    <span style={{ marginLeft:"auto", background:"#a78bfa22", color:"#a78bfa", border:"1px solid #a78bfa40", borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                      CONTENT SCORE {contentStudio.score_breakdown?.overall_content_score}/100
+                    </span>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:20 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Optimised Tags</div>
+                      {[
+                        { label:"Title",       value:contentStudio.improved_title,       score:contentStudio.score_breakdown?.title_score },
+                        { label:"Description", value:contentStudio.improved_description, score:contentStudio.score_breakdown?.description_score },
+                        { label:"H1",          value:contentStudio.improved_h1,          score:contentStudio.score_breakdown?.h1_score },
+                      ].map((row) => (
+                        <div key={row.label} style={{ marginBottom:12 }}>
+                          <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                            <span style={{ fontSize:11, color:"#64748b" }}>{row.label}</span>
+                            <span style={{ fontSize:11, color: (row.score??0)>=70?"#22c55e":(row.score??0)>=50?"#f59e0b":"#ef4444", fontWeight:700 }}>{row.score}/100</span>
+                          </div>
+                          <div style={{ background:"#060d1a", border:"1px solid #1e3a5f", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#e2e8f0" }}>{row.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Content Gaps</div>
+                      {contentStudio.content_gaps?.map((g: string, i: number) => (
+                        <div key={i} style={{ display:"flex", gap:8, marginBottom:8 }}>
+                          <span style={{ color:"#f59e0b", fontSize:11, minWidth:16, paddingTop:1 }}>!</span>
+                          <span style={{ color:"#94a3b8", fontSize:12 }}>{g}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Schema Recommendations</div>
+                      {contentStudio.schema_recommendations?.map((s: string, i: number) => (
+                        <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                          <span style={{ color:"#38bdf8", fontSize:11, minWidth:16 }}>→</span>
+                          <span style={{ color:"#94a3b8", fontSize:12 }}>{s}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div>
+                      <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:8 }}>Readability Tips</div>
+                      {contentStudio.readability_tips?.map((t: string, i: number) => (
+                        <div key={i} style={{ display:"flex", gap:8, marginBottom:6 }}>
+                          <span style={{ color:"#34d399", fontSize:11, minWidth:16 }}>✓</span>
+                          <span style={{ color:"#94a3b8", fontSize:12 }}>{t}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Self-Learning Engine */}
+              {selfLearning && (
+                <div style={{ background:"#0a1628", border:"1px solid #1e3a5f", borderRadius:16, padding:28 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+                    <span style={{ fontSize:20 }}>🧠</span>
+                    <h2 style={{ color:"#f1f5f9", fontSize:"1.1rem", fontWeight:700, margin:0 }}>Self-Learning Engine</h2>
+                    {selfLearning.has_history && (
+                      <span style={{ marginLeft:"auto", background: selfLearning.trend==="improving"?"#22c55e22":"#64748b22", color: selfLearning.trend==="improving"?"#22c55e":"#94a3b8", border:`1px solid ${selfLearning.trend==="improving"?"#22c55e":"#64748b"}40`, borderRadius:20, padding:"2px 10px", fontSize:11, fontWeight:700 }}>
+                        {selfLearning.scan_count} SCANS TRACKED
+                      </span>
+                    )}
+                  </div>
+                  {!selfLearning.has_history ? (
+                    <div style={{ textAlign:"center", padding:"20px 0", color:"#64748b", fontSize:13 }}>
+                      <div style={{ fontSize:32, marginBottom:8 }}>🔄</div>
+                      <div>{selfLearning.message}</div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
+                        <div>
+                          <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Score Deltas (vs First Scan)</div>
+                          {Object.entries(selfLearning.delta ?? {}).map(([k, v]) => {
+                            const val = Number(v);
+                            const clr = val > 0 ? "#22c55e" : val < 0 ? "#ef4444" : "#64748b";
+                            return (
+                              <div key={k} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+                                <span style={{ color:"#94a3b8", fontSize:12, textTransform:"capitalize" }}>{k}</span>
+                                <span style={{ color:clr, fontWeight:700, fontSize:13 }}>{val > 0 ? "+" : ""}{val.toFixed(1)}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div>
+                          <div style={{ fontSize:11, color:"#64748b", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>AI Insights</div>
+                          {selfLearning.insights?.map((ins: string, i: number) => (
+                            <div key={i} style={{ display:"flex", gap:8, marginBottom:8 }}>
+                              <span style={{ color:"#a78bfa", fontSize:11, minWidth:16 }}>◆</span>
+                              <span style={{ color:"#94a3b8", fontSize:12 }}>{ins}</span>
+                            </div>
+                          ))}
+                          {selfLearning.adaptive_recommendation && (
+                            <div style={{ marginTop:12, background:"#060d1a", border:"1px solid #38bdf840", borderRadius:8, padding:"10px 14px", fontSize:12, color:"#38bdf8" }}>
+                              💡 {selfLearning.adaptive_recommendation}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       )}
 
