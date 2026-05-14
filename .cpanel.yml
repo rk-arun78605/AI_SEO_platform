@@ -1,7 +1,8 @@
 ---
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/indrxkhf/ai-seo-platform
+    - export DEPLOYPATH=/home/indrxkhf/aisle
+    - export NPM=/opt/alt/alt-nodejs22/root/usr/lib/node_modules/npm/bin/npm
     - rm -rf $DEPLOYPATH/.next $DEPLOYPATH/tsconfig.tsbuildinfo
-    - npm ci --production=false --prefix $DEPLOYPATH
-    - npm run build --prefix $DEPLOYPATH
+    - $NPM ci --production=false --prefix $DEPLOYPATH
+    - $NPM run build --prefix $DEPLOYPATH
